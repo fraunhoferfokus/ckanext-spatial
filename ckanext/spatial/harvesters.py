@@ -864,3 +864,96 @@ class GeminiWafHarvester(GeminiHarvester, SingletonPlugin):
         return [base_url + i for i in urls]
 
 
+class OGPDHarvester(InspireHarvester,SingletonPlugin):
+    '''
+    A Harvester for CSW servers, for targeted at import into the German Open Data Platform now focused on Geodatenkatalog-DE
+    '''
+    implements(IHarvester)
+
+    def info(self):
+        return {
+            'name': 'ogpd',
+            'title': 'OGPD Harvester',
+            'description': 'Harvester for CSW Servers like GDI Geodatenkatalog'
+            }
+
+    def gather_stage(self,harvest_job):
+        log.debug('In OGPDHarvester gather_stage')
+        # Get source URL
+        url = harvest_job.source.url
+
+        # Setup CSW server
+        try:
+            self._setup_csw_server(url)
+        except Exception, e:
+            self._save_gather_error('Error contacting the CSW server: %s' % e,harvest_job)
+            return None
+
+
+        log.debug('Starting gathering for %s ' % url)
+        used_identifiers = []
+        ids = []
+        try:
+            for identifier in self.csw.getidentifiers(page=10):
+                try:
+                    log.info('Got identifier %s from the CSW', identifier)
+                    if identifier in used_identifiers:
+                        log.error('CSW identifier %r already used, skipping...' % identifier)
+                        continue
+                    if identifier is None:
+                        log.error('CSW returned identifier %r, skipping...' % identifier)
+                        ## log an error here? happens with the dutch data
+                        continue
+
+                    # Create a new HarvestObject for this identifier
+                    obj = HarvestObject(guid = identifier, job = harvest_job)
+                    obj.save()
+
+                    ids.append(obj.id)
+                    used_identifiers.append(identifier)
+                except Exception, e:
+                    self._save_gather_error('Error for the identifier %s [%r]' % (identifier,e), harvest_job)
+                    continue
+
+        except Exception, e:
+            self._save_gather_error('Error gathering the identifiers from the CSW server [%r]' % e, harvest_job)
+            return None
+
+        if len(ids) == 0:
+            self._save_gather_error('No records received from the CSW server', harvest_job)
+            return None
+
+        return ids
+
+    def fetch_stage(self,harvest_object):
+        url = harvest_object.source.url
+        # Setup CSW server
+        try:
+            self._setup_csw_server(url)
+        except Exception, e:
+            self._save_object_error('Error contacting the CSW server: %s' % e,harvest_object)
+            return False
+
+
+        identifier = harvest_object.guid
+        try:
+            # TODO: investigate support for both gmd:MD_Metadata or gmi:MI_Metadata
+            record = self.csw.getrecordbyid([identifier])
+        except Exception, e:
+            self._save_object_error('Error getting the CSW record with GUID %s' % identifier,harvest_object)
+            return False
+
+        if record is None:
+            self._save_object_error('Empty record for GUID %s' % identifier,harvest_object)
+            return False
+
+        try:
+            # Save the fetch contents in the HarvestObject
+            harvest_object.content = record['xml']
+            harvest_object.save()
+        except Exception,e:
+            self._save_object_error('Error saving the harvest object for GUID %s [%r]' % (identifier,e),harvest_object)
+            return False
+
+        log.debug('XML content saved (len %s)', len(record['xml']))
+        return True

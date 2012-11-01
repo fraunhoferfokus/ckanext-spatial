@@ -38,6 +38,7 @@ setup(
     gemini_csw_harvester=ckanext.spatial.harvesters:GeminiCswHarvester
     gemini_doc_harvester=ckanext.spatial.harvesters:GeminiDocHarvester
     gemini_waf_harvester=ckanext.spatial.harvesters:GeminiWafHarvester
+    ogpd_harvester=ckanext.inspire.harvesters:OGPDHarvester
 
     [paste.paster_command]
     spatial=ckanext.spatial.commands.spatial:Spatial
