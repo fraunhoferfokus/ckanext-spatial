@@ -245,8 +245,8 @@ class GeminiHarvester(SpatialHarvester):
         if len(last_harvested_object) == 1:
             last_harvested_object = last_harvested_object[0]
         elif len(last_harvested_object) > 1:
-                raise Exception('Application Error: more than one current record for GUID %s' % gemini_guid)
-
+            raise Exception('Application Error: more than one current record for GUID %s' % gemini_guid)
+        
         reactivate_package = False
         if last_harvested_object:
             # We've previously harvested this (i.e. it's an update)
@@ -443,42 +443,47 @@ class GeminiHarvester(SpatialHarvester):
                 extras_as_dict.append({'key':key,'value':json.dumps(value)})
 
         package_dict['extras'] = extras_as_dict
-
-        if package == None:
-            # Create new package from data.
-            package = self._create_package_from_data(package_dict)
-            log.info('Created new package ID %s with GEMINI guid %s', package['id'], gemini_guid)
+        
+        # package does not contain any resources, skip package
+        if not package_dict['resources']:
+            log.info('Resources are empty, skip this package')
+            return None
         else:
-            package = self._create_package_from_data(package_dict, package = package)
-            log.info('Updated existing package ID %s with existing GEMINI guid %s', package['id'], gemini_guid)
+            if package == None:
+                # Create new package from data.
+                package = self._create_package_from_data(package_dict)
+                log.info('Created new package ID %s with GEMINI guid %s', package['id'], gemini_guid)
+            else:
+                package = self._create_package_from_data(package_dict, package = package)
+                log.info('Updated existing package ID %s with existing GEMINI guid %s', package['id'], gemini_guid)
 
-        # Flag the other objects of this source as not current anymore
-        from ckanext.harvest.model import harvest_object_table
-        u = update(harvest_object_table) \
-                .where(harvest_object_table.c.package_id==bindparam('b_package_id')) \
-                .values(current=False)
-        Session.execute(u, params={'b_package_id':package['id']})
-        Session.commit()
-
-        # Refresh current object from session, otherwise the
-        # import paster command fails
-        Session.remove()
-        Session.add(self.obj)
-        Session.refresh(self.obj)
-
-        # Set reference to package in the HarvestObject and flag it as
-        # the current one
-        if not self.obj.package_id:
-            self.obj.package_id = package['id']
-
-        self.obj.current = True
-        self.obj.save()
-
-
-        assert gemini_guid == [e['value'] for e in package['extras'] if e['key'] == 'guid'][0]
-        assert self.obj.id == [e['value'] for e in package['extras'] if e['key'] ==  'harvest_object_id'][0]
-
-        return package
+            # Flag the other objects of this source as not current anymore
+            from ckanext.harvest.model import harvest_object_table
+            u = update(harvest_object_table) \
+                    .where(harvest_object_table.c.package_id==bindparam('b_package_id')) \
+                    .values(current=False)
+            Session.execute(u, params={'b_package_id':package['id']})
+            Session.commit()
+    
+            # Refresh current object from session, otherwise the
+            # import paster command fails
+            Session.remove()
+            Session.add(self.obj)
+            Session.refresh(self.obj)
+    
+            # Set reference to package in the HarvestObject and flag it as
+            # the current one
+            if not self.obj.package_id:
+                self.obj.package_id = package['id']
+    
+            self.obj.current = True
+            self.obj.save()
+    
+    
+            assert gemini_guid == [e['value'] for e in package['extras'] if e['key'] == 'guid'][0]
+            assert self.obj.id == [e['value'] for e in package['extras'] if e['key'] ==  'harvest_object_id'][0]
+    
+            return package
 
     def gen_new_name(self, title):
         name = munge_title_to_name(title).replace('_', '-')
@@ -864,7 +869,7 @@ class GeminiWafHarvester(GeminiHarvester, SingletonPlugin):
         return [base_url + i for i in urls]
 
 
-class OGPDHarvester(InspireHarvester,SingletonPlugin):
+class OGPDHarvester(GeminiHarvester,SingletonPlugin):
     '''
     A Harvester for CSW servers, for targeted at import into the German Open Data Platform now focused on Geodatenkatalog-DE
     '''
@@ -872,7 +877,7 @@ class OGPDHarvester(InspireHarvester,SingletonPlugin):
 
     def info(self):
         return {
-            'name': 'ogpd',
+            'name': 'csw',
             'title': 'OGPD Harvester',
             'description': 'Harvester for CSW Servers like GDI Geodatenkatalog'
             }
@@ -884,7 +889,7 @@ class OGPDHarvester(InspireHarvester,SingletonPlugin):
 
         # Setup CSW server
         try:
-            self._setup_csw_server(url)
+            self._setup_csw_client(url)
         except Exception, e:
             self._save_gather_error('Error contacting the CSW server: %s' % e,harvest_job)
             return None
@@ -894,7 +899,7 @@ class OGPDHarvester(InspireHarvester,SingletonPlugin):
         used_identifiers = []
         ids = []
         try:
-            for identifier in self.csw.getidentifiers(page=10):
+            for identifier in self.csw.getidentifiers(limit=10, page=10):
                 try:
                     log.info('Got identifier %s from the CSW', identifier)
                     if identifier in used_identifiers:
@@ -929,7 +934,7 @@ class OGPDHarvester(InspireHarvester,SingletonPlugin):
         url = harvest_object.source.url
         # Setup CSW server
         try:
-            self._setup_csw_server(url)
+            self._setup_csw_client(url)
         except Exception, e:
             self._save_object_error('Error contacting the CSW server: %s' % e,harvest_object)
             return False
@@ -957,3 +962,6 @@ class OGPDHarvester(InspireHarvester,SingletonPlugin):
 
         log.debug('XML content saved (len %s)', len(record['xml']))
         return True
+
+    def _setup_csw_client(self, url):
+        self.csw = CswService(url)
