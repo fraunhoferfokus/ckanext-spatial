@@ -863,8 +863,7 @@ class GeminiWafHarvester(GeminiHarvester, SingletonPlugin):
         base_url += '/'
         return [base_url + i for i in urls]
 
-
-class OGPDHarvester(InspireHarvester,SingletonPlugin):
+class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
     '''
     A Harvester for CSW servers, for targeted at import into the German Open Data Platform now focused on Geodatenkatalog-DE
     '''
@@ -882,9 +881,9 @@ class OGPDHarvester(InspireHarvester,SingletonPlugin):
         # Get source URL
         url = harvest_job.source.url
 
-        # Setup CSW server
+        # Setup CSW client
         try:
-            self._setup_csw_server(url)
+            self._setup_csw_client(url)
         except Exception, e:
             self._save_gather_error('Error contacting the CSW server: %s' % e,harvest_job)
             return None
@@ -927,9 +926,9 @@ class OGPDHarvester(InspireHarvester,SingletonPlugin):
 
     def fetch_stage(self,harvest_object):
         url = harvest_object.source.url
-        # Setup CSW server
+        # Setup CSW client
         try:
-            self._setup_csw_server(url)
+            self._setup_csw_client(url)
         except Exception, e:
             self._save_object_error('Error contacting the CSW server: %s' % e,harvest_object)
             return False
@@ -957,3 +956,6 @@ class OGPDHarvester(InspireHarvester,SingletonPlugin):
 
         log.debug('XML content saved (len %s)', len(record['xml']))
         return True
+
+    def _setup_csw_client(self, url):
+        self.csw = CswService(url)
