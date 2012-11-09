@@ -113,7 +113,7 @@ class CswService(OwsService):
                 raise CswError(err)
             identifiers = csw.records.keys()
             if limit is not None:
-                identifiers = identifiers[:(limit-startposition)]
+                identifiers = identifiers[:(limit-kwa["startposition"])]
             for ident in identifiers:
                 yield ident
             if len(identifiers) < page:
