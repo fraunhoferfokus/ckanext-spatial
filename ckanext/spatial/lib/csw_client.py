@@ -152,8 +152,8 @@ class CswService(OwsService):
         except TypeError:
             # API incompatibilities between different flavours of elementtree
             try:
-                record["xml"] = etree.tostring(mdtree)
-            except AssertionError:
                 record["xml"] = etree.tostring(md)
+            except AssertionError:
+                record["xml"] = etree.tostring(mdtree)
         record["tree"] = mdtree
         return record
