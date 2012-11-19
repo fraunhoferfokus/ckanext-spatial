@@ -260,7 +260,7 @@ class GeminiReferenceDate(GeminiElement):
                 "gmd:dateType/gmd:CI_DateTypeCode/@codeListValue",
                 "gmd:dateType/gmd:CI_DateTypeCode/text()",
             ],
-            multiplicity="1",
+            multiplicity="0..1",
         ),
         GeminiElement(
             name="value",
@@ -656,6 +656,7 @@ class InspireDocument(MappedXmlDocument):
             search_paths=[
                 "gmd:hierarchyLevel/gmd:MD_ScopeCode/@codeListValue",
                 "gmd:hierarchyLevel/gmd:MD_ScopeCode/text()",
+                "gmd:hierarchyLevelName/gco:CharacterString/text()",
             ],
             multiplicity="0..1",
         ),
@@ -949,6 +950,7 @@ class InspireDocument(MappedXmlDocument):
             name="resource-locator",
             search_paths=[
                 "gmd:distributionInfo/gmd:MD_Distribution/gmd:transferOptions/gmd:MD_DigitalTransferOptions/gmd:onLine/gmd:CI_OnlineResource",
+                "gmd:identificationInfo/srv:SV_ServiceIdentification/srv:containsOperations/srv:SV_OperationMetadata/srv:connectPoint/gmd:CI_OnlineResource",
             ],
             multiplicity="*",
         ),
