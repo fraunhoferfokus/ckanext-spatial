@@ -217,11 +217,11 @@ class GeminiHarvester(SpatialHarvester):
         log = logging.getLogger(__name__ + '.import')
         xml = etree.fromstring(gemini_string)
 
-        valid, messages = self._get_validator().is_valid(xml)
-        if not valid:
-            log.error('Errors found for object with GUID %s:' % self.obj.guid)
-            out = messages[0] + ':\n' + '\n'.join(messages[1:])
-            self._save_object_error(out,self.obj,'Import')
+        #valid, messages = self._get_validator().is_valid(xml)
+        #if not valid:
+        #    log.error('Errors found for object with GUID %s:' % self.obj.guid)
+        #    out = messages[0] + ':\n' + '\n'.join(messages[1:])
+        #    self._save_object_error(out,self.obj,'Import')
 
         unicode_inspire_string = etree.tostring(xml, encoding=unicode, pretty_print=True)
 
@@ -683,18 +683,22 @@ class GeminiHarvester(SpatialHarvester):
         resource_locators = gemini_values.get('resource-locator', [])
 
         if len(resource_locators):
+            log.info("Found %s resources" %len(resource_locators))
             for resource_locator in resource_locators:
                 url = resource_locator.get('url','')
                 if url:
                     resource_format = ''
                     resource = {}
-                    if extras['resource-type'] == 'service':
-                        # Check if the service is a view service
-                        test_url = url.split('?')[0] if '?' in url else url
-                        if self._is_wms(test_url):
-                            resource['verified'] = True
-                            resource['verified_date'] = datetime.now().isoformat()
-                            resource_format = 'WMS'
+                    #if extras['resource-type'] == 'service':
+                    # Check if the service is a view service
+                    test_url = url.split('?')[0] if '?' in url else url
+                    if self._is_wms(test_url):
+                        resource['verified'] = True
+                        resource['verified_date'] = datetime.now().isoformat()
+                        resource_format = 'WMS'
+                    else:
+                        log.info('Invalid WMS Service!')
+
                     resource.update(
                         {
                             'url': url,
@@ -729,7 +733,6 @@ class GeminiHarvester(SpatialHarvester):
             log.error('Package with GUID %s does not contain any resources, skip this package' % self.obj.guid)
             out = "Package does not contain any resources"
             self._save_object_error(out,self.obj,'Import')
-            #log.info("Package does not contain any resources, skip this package!")
             return None
         else:
             if package == None:
@@ -860,13 +863,13 @@ class GeminiHarvester(SpatialHarvester):
         if gemini_xml is None:
             self._save_gather_error('Content is not a valid Gemini document',self.harvest_job)
 
-        valid, messages = self._get_validator().is_valid(gemini_xml)
-        if not valid:
-            out = messages[0] + ':\n' + '\n'.join(messages[1:])
-            if url:
-                self._save_gather_error('Validation error for %s - %s'% (url,out),self.harvest_job)
-            else:
-                self._save_gather_error('Validation error - %s'%out,self.harvest_job)
+        #valid, messages = self._get_validator().is_valid(gemini_xml)
+        #if not valid:
+        #    out = messages[0] + ':\n' + '\n'.join(messages[1:])
+        #    if url:
+        #        self._save_gather_error('Validation error for %s - %s'% (url,out),self.harvest_job)
+        #    else:
+        #        self._save_gather_error('Validation error - %s'%out,self.harvest_job)
 
         gemini_string = etree.tostring(gemini_xml)
         gemini_document = GeminiDocument(gemini_string)
@@ -1180,7 +1183,7 @@ class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
         used_identifiers = []
         ids = []
         try:
-            for identifier in self.csw.getidentifiers(limit=10,page=10):
+            for identifier in self.csw.getidentifiers(limit=100,page=10):
                 try:
                     log.info('Got identifier %s from the CSW', identifier)
                     if identifier in used_identifiers:
@@ -1248,7 +1251,8 @@ class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
         '''Import stage of the OGPD Harvester'''
 
         log = logging.getLogger(__name__ + '.import')
-        log.debug('Import stage for harvest object: %r', harvest_object)
+        #log.debug('Import stage for harvest object: %r', harvest_object)
+        log.debug('Import stage for harvest object')
 
         if not harvest_object:
             log.error('No harvest object received')
