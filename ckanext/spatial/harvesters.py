@@ -45,7 +45,7 @@ from ckanext.harvest.interfaces import IHarvester
 from ckanext.harvest.model import HarvestObject, HarvestGatherError, \
                                     HarvestObjectError
 
-from ckanext.spatial.model import GeminiDocument
+from ckanext.spatial.model import GeminiDocument, InspireDocument
 from ckanext.spatial.lib.csw_client import CswService
 from ckanext.spatial.validation import Validators, all_validators
 
@@ -213,6 +213,19 @@ class GeminiHarvester(SpatialHarvester):
 
         package = self.write_package_from_gemini_string(unicode_gemini_string)
 
+    def import_inspire_object(self, gemini_string):
+        log = logging.getLogger(__name__ + '.import')
+        xml = etree.fromstring(gemini_string)
+
+        valid, messages = self._get_validator().is_valid(xml)
+        if not valid:
+            log.error('Errors found for object with GUID %s:' % self.obj.guid)
+            out = messages[0] + ':\n' + '\n'.join(messages[1:])
+            self._save_object_error(out,self.obj,'Import')
+
+        unicode_inspire_string = etree.tostring(xml, encoding=unicode, pretty_print=True)
+
+        package = self.write_package_from_inspire_string(unicode_inspire_string)
 
     def write_package_from_gemini_string(self, content):
         '''Create or update a Package based on some content that has
@@ -487,6 +500,273 @@ class GeminiHarvester(SpatialHarvester):
     
             return package
 
+    def write_package_from_inspire_string(self, content):
+        '''Create or update a package based on fetched INSPIRE content'''
+
+        log = logging.getLogger(__name__ + '.import')
+        package = None
+        gemini_document = InspireDocument(content)
+        gemini_values = gemini_document.read_values()
+        gemini_guid = gemini_values['guid']
+
+        # Save the metadata reference date in the Harvest Object
+        try:
+            metadata_modified_date = datetime.strptime(gemini_values['metadata-date'],'%Y-%m-%d')
+        except ValueError:
+            try:
+                metadata_modified_date = datetime.strptime(gemini_values['metadata-date'],'%Y-%m-%dT%H:%M:%S')
+            except:
+                raise Exception('Could not extract reference date for GUID %s (%s)' \
+                        % (gemini_guid,gemini_values['metadata-date']))
+
+        self.obj.metadata_modified_date = metadata_modified_date
+        self.obj.save()
+
+        last_harvested_object = Session.query(HarvestObject) \
+                            .filter(HarvestObject.guid==gemini_guid) \
+                            .filter(HarvestObject.current==True) \
+                            .all()
+
+        if len(last_harvested_object) == 1:
+            last_harvested_object = last_harvested_object[0]
+        elif len(last_harvested_object) > 1:
+                raise Exception('Application Error: more than one current record for GUID %s' % gemini_guid)
+
+        reactivate_package = False
+        if last_harvested_object:
+            # We've previously harvested this (i.e. it's an update)
+
+            # Use metadata modified date instead of content to determine if the package
+            # needs to be updated
+            if last_harvested_object.metadata_modified_date is None \
+                or last_harvested_object.metadata_modified_date < self.obj.metadata_modified_date \
+                or self.force_import \
+                or (last_harvested_object.metadata_modified_date == self.obj.metadata_modified_date and
+                    last_harvested_object.source.active is False):
+
+                if self.force_import:
+                    log.info('Import forced for object %s with GUID %s' % (self.obj.id,gemini_guid))
+                else:
+                    log.info('Package for object with GUID %s needs to be created or updated' % gemini_guid)
+
+                package = last_harvested_object.package
+
+                # If the package has a deleted state, we will only update it and reactivate it if the
+                # new document has a more recent modified date
+                if package.state == u'deleted':
+                    if last_harvested_object.metadata_modified_date < self.obj.metadata_modified_date:
+                        log.info('Package for object with GUID %s will be re-activated' % gemini_guid)
+                        reactivate_package = True
+                    else:
+                         log.info('Remote record with GUID %s is not more recent than a deleted package, skipping... ' % gemini_guid)
+                         return None
+
+            else:
+                if last_harvested_object.content != self.obj.content and \
+                 last_harvested_object.metadata_modified_date == self.obj.metadata_modified_date:
+                    raise Exception('The contents of document with GUID %s changed, but the metadata date has not been updated' % gemini_guid)
+                else:
+                    # The content hasn't changed, no need to update the package
+                    log.info('Document with GUID %s unchanged, skipping...' % (gemini_guid))
+                return None
+        else:
+            log.info('No package with INSPIRE guid %s found, let''s create one' % gemini_guid)
+
+        extras = {
+            'published_by': self.obj.source.publisher_id or '',
+            'UKLP': 'True',
+            'harvest_object_id': self.obj.id
+        }
+
+        # Just add some of the metadata as extras, not the whole lot
+        for name in [
+            # Essentials
+            'bbox-east-long',
+            'bbox-north-lat',
+            'bbox-south-lat',
+            'bbox-west-long',
+            'spatial-reference-system',
+            'guid',
+            # Usefuls
+            'dataset-reference-date',
+            'resource-type',
+            'metadata-language', # Language
+            'metadata-date', # Released
+            'coupled-resource',
+            'contact-email',
+            'frequency-of-update',
+            'spatial-data-service-type',
+            'access-constraints',
+            'use-constraints',
+            'other-constraints'
+        ]:
+            extras[name] = gemini_values[name]
+
+        if gemini_values.has_key('temporal-extent-begin'):
+            #gemini_values['temporal-extent-begin'].sort()
+            extras['temporal_coverage-from'] = gemini_values['temporal-extent-begin']
+        if gemini_values.has_key('temporal-extent-end'):
+            #gemini_values['temporal-extent-end'].sort()
+            extras['temporal_coverage-to'] = gemini_values['temporal-extent-end']
+
+        # Save responsible organization roles
+        parties = {}
+        owners = []
+        publishers = []
+        for responsible_party in gemini_values['responsible-organisation']:
+
+            if responsible_party['role'] == 'owner':
+                owners.append(responsible_party['organisation-name'])
+            elif responsible_party['role'] == 'publisher':
+                publishers.append(responsible_party['organisation-name'])
+
+            if responsible_party['organisation-name'] in parties:
+                if not responsible_party['role'] in parties[responsible_party['organisation-name']]:
+                    parties[responsible_party['organisation-name']].append(responsible_party['role'])
+            else:
+                parties[responsible_party['organisation-name']] = [responsible_party['role']]
+
+        parties_extra = []
+        for party_name in parties:
+            parties_extra.append('%s (%s)' % (party_name, ', '.join(parties[party_name])))
+        extras['responsible-party'] = '; '.join(parties_extra)
+
+        # Save provider in a separate extra:
+        # first organization to have a role of 'owner', and if there is none, first one with
+        # a role of 'publisher'
+        if len(owners):
+            extras['provider'] = owners[0]
+        elif len(publishers):
+            extras['provider'] = publishers[0]
+        else:
+            extras['provider'] = u''
+
+        # Construct a GeoJSON extent so ckanext-spatial can register the extent geometry
+        extent_string = self.extent_template.substitute(
+                minx = extras['bbox-east-long'],
+                miny = extras['bbox-south-lat'],
+                maxx = extras['bbox-west-long'],
+                maxy = extras['bbox-north-lat']
+                )
+
+        extras['spatial'] = extent_string.strip()
+
+        tags = []
+        for tag in gemini_values['tags']:
+            tag = tag[:50] if len(tag) > 50 else tag
+            tags.append({'name':tag})
+
+        package_dict = {
+            'title': gemini_values['title'],
+            'notes': gemini_values['abstract'],
+            'tags': tags,
+            'resources':[]
+        }
+
+        if self.obj.source.publisher_id:
+            package_dict['groups'] = [{'id':self.obj.source.publisher_id}]
+
+
+        if reactivate_package:
+            package_dict['state'] = u'active'
+
+        if package is None or package.title != gemini_values['title']:
+            name = self.gen_new_name(gemini_values['title'])
+            if not name:
+                name = self.gen_new_name(str(gemini_guid))
+            if not name:
+                raise Exception('Could not generate a unique name from the title or the GUID. Please choose a more unique title.')
+            package_dict['name'] = name
+        else:
+            package_dict['name'] = package.name
+
+        resource_locators = gemini_values.get('resource-locator', [])
+
+        if len(resource_locators):
+            for resource_locator in resource_locators:
+                url = resource_locator.get('url','')
+                if url:
+                    resource_format = ''
+                    resource = {}
+                    if extras['resource-type'] == 'service':
+                        # Check if the service is a view service
+                        test_url = url.split('?')[0] if '?' in url else url
+                        if self._is_wms(test_url):
+                            resource['verified'] = True
+                            resource['verified_date'] = datetime.now().isoformat()
+                            resource_format = 'WMS'
+                    resource.update(
+                        {
+                            'url': url,
+                            'name': resource_locator.get('name',''),
+                            'description': resource_locator.get('description') if resource_locator.get('description') else 'Resource locator',
+                            'format': resource_format or None,
+                            'resource_locator_protocol': resource_locator.get('protocol',''),
+                            'resource_locator_function':resource_locator.get('function','')
+
+                        })
+                    package_dict['resources'].append(resource)
+
+            # Guess the best view service to use in WMS preview
+            verified_view_resources = [r for r in package_dict['resources'] if 'verified' in r and r['format'] == 'WMS']
+            if len(verified_view_resources):
+                verified_view_resources[0]['ckan_recommended_wms_preview'] = True
+            else:
+                view_resources = [r for r in package_dict['resources'] if r['format'] == 'WMS']
+                if len(view_resources):
+                    view_resources[0]['ckan_recommended_wms_preview'] = True
+
+        extras_as_dict = []
+        for key,value in extras.iteritems():
+            if isinstance(value,(basestring,Number)):
+                extras_as_dict.append({'key':key,'value':value})
+            else:
+                extras_as_dict.append({'key':key,'value':json.dumps(value)})
+
+        package_dict['extras'] = extras_as_dict
+
+        if not package_dict['resources']:
+            log.error('Package with GUID %s does not contain any resources, skip this package' % self.obj.guid)
+            out = "Package does not contain any resources"
+            self._save_object_error(out,self.obj,'Import')
+            #log.info("Package does not contain any resources, skip this package!")
+            return None
+        else:
+            if package == None:
+                # Create new package from data.
+                package = self._create_package_from_data(package_dict)
+                log.info('Created new package ID %s with GEMINI guid %s', package['id'], gemini_guid)
+            else:
+                package = self._create_package_from_data(package_dict, package = package)
+                log.info('Updated existing package ID %s with existing GEMINI guid %s', package['id'], gemini_guid)
+    
+            # Flag the other objects of this source as not current anymore
+            from ckanext.harvest.model import harvest_object_table
+            u = update(harvest_object_table) \
+                    .where(harvest_object_table.c.package_id==bindparam('b_package_id')) \
+                    .values(current=False)
+            Session.execute(u, params={'b_package_id':package['id']})
+            Session.commit()
+    
+            # Refresh current object from session, otherwise the
+            # import paster command fails
+            Session.remove()
+            Session.add(self.obj)
+            Session.refresh(self.obj)
+    
+            # Set reference to package in the HarvestObject and flag it as
+            # the current one
+            if not self.obj.package_id:
+                self.obj.package_id = package['id']
+    
+            self.obj.current = True
+            self.obj.save()
+    
+    
+            assert gemini_guid == [e['value'] for e in package['extras'] if e['key'] == 'guid'][0]
+            assert self.obj.id == [e['value'] for e in package['extras'] if e['key'] ==  'harvest_object_id'][0]
+    
+            return package
     def gen_new_name(self, title):
         name = munge_title_to_name(title).replace('_', '-')
         while '--' in name:
@@ -878,7 +1158,7 @@ class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
 
     def info(self):
         return {
-            'name': 'csw',
+            'name': 'ogpd',
             'title': 'OGPD Harvester',
             'description': 'Harvester for CSW Servers like GDI Geodatenkatalog'
             }
@@ -963,6 +1243,35 @@ class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
 
         log.debug('XML content saved (len %s)', len(record['xml']))
         return True
+
+    def import_stage(self, harvest_object):
+        '''Import stage of the OGPD Harvester'''
+
+        log = logging.getLogger(__name__ + '.import')
+        log.debug('Import stage for harvest object: %r', harvest_object)
+
+        if not harvest_object:
+            log.error('No harvest object received')
+            return False
+
+        # Save a reference
+        self.obj = harvest_object
+
+        if harvest_object.content is None:
+            self._save_object_error('Empty content for object %s' % harvest_object.id,harvest_object,'Import')
+            return False
+        try:
+            self.import_inspire_object(harvest_object.content)
+            return True
+        except Exception, e:
+            log.error('Exception during import: %s' % text_traceback())
+            if not str(e).strip():
+                self._save_object_error('Error importing INSPIRE document.', harvest_object, 'Import')
+            else:
+                self._save_object_error('Error importing INSPIRE document: %s' % str(e), harvest_object, 'Import')
+
+            if debug_exception_mode:
+                raise
 
     def _setup_csw_client(self, url):
         self.csw = CswService(url)
