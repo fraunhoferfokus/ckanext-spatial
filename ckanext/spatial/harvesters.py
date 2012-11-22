@@ -47,6 +47,7 @@ from ckanext.harvest.model import HarvestObject, HarvestGatherError, \
 
 from ckanext.spatial.model import GeminiDocument, InspireDocument
 from ckanext.spatial.lib.csw_client import CswService
+from ckanext.spatial.lib.groupmap import Util
 from ckanext.spatial.validation import Validators, all_validators
 
 log = logging.getLogger(__name__)
@@ -601,6 +602,11 @@ class GeminiHarvester(SpatialHarvester):
             'other-constraints'
         ]:
             extras[name] = gemini_values[name]
+        
+        #add groups (mapped from ISO 19115 into OGD schema)      
+        u = Util()
+        cat = u.translate(gemini_values['topic-category'], 'iso')
+        extras['subgroups'] = cat
 
         if gemini_values.has_key('temporal-extent-begin'):
             #gemini_values['temporal-extent-begin'].sort()
