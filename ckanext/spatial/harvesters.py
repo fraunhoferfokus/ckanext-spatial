@@ -50,6 +50,9 @@ from ckanext.spatial.lib.csw_client import CswService
 from ckanext.spatial.lib.groupmap import Util
 from ckanext.spatial.validation import Validators, all_validators
 
+import ckanext.spatial.lib.license_map
+
+
 log = logging.getLogger(__name__)
 
 DEFAULT_VALIDATOR_PROFILES = ['iso19139']
@@ -597,9 +600,6 @@ class GeminiHarvester(SpatialHarvester):
             'contact-email',
             'frequency-of-update',
             'spatial-data-service-type',
-            'access-constraints',
-            'use-constraints',
-            'other-constraints'
         ]:
             extras[name] = gemini_values[name]
         
@@ -612,6 +612,18 @@ class GeminiHarvester(SpatialHarvester):
         if gemini_values.has_key('temporal-extent-end'):
             #gemini_values['temporal-extent-end'].sort()
             extras['temporal_coverage-to'] = gemini_values['temporal-extent-end']
+
+        # map INSPIRE constraint fields to OGPD license fields
+        terms_of_use = ckanext.spatial.lib.license_map.translate_license_data(gemini_values)
+
+        # terms of use == null indicates to drop the entry completely
+        if terms_of_use is None:
+                return None
+
+        extras['terms_of_use.id'] = terms_of_use['id']
+        extras['terms_of_use.license_url'] = terms_of_use['license_url']
+        extras['terms_of_use.other'] = terms_of_use['other']
+
 
         # Save responsible organization roles
         parties = {}
@@ -738,9 +750,9 @@ class GeminiHarvester(SpatialHarvester):
         extras_as_dict = []
         for key,value in extras.iteritems():
             if isinstance(value,(basestring,Number)):
-                extras_as_dict.append({'key':key,'value':value})
+               extras_as_dict.append({'key':key,'value':value})
             else:
-                extras_as_dict.append({'key':key,'value':json.dumps(value)})
+               extras_as_dict.append({'key':key,'value':json.dumps(value)})
 
         package_dict['extras'] = extras_as_dict
 
