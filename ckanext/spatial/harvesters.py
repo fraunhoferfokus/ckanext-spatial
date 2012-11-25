@@ -603,10 +603,8 @@ class GeminiHarvester(SpatialHarvester):
         ]:
             extras[name] = gemini_values[name]
         
-        #add groups (mapped from ISO 19115 into OGD schema)      
-        u = Util()
-        cat = u.translate(gemini_values['topic-category'], 'iso')
-        extras['subgroups'] = cat
+        extras['subgroups'] = gemini_values['topic-category']
+        log.debug('Set subgroups: ' + str(gemini_values['topic-category']))
 
         if gemini_values.has_key('temporal-extent-begin'):
             #gemini_values['temporal-extent-begin'].sort()
@@ -661,13 +659,24 @@ class GeminiHarvester(SpatialHarvester):
         for tag in gemini_values['tags']:
             tag = tag[:50] if len(tag) > 50 else tag
             tags.append({'name':tag})
+        
+        #add groups (mapped from ISO 19115 into OGD schema)      
+        u = Util()
+        categories = []
+        for cat in  u.translate(gemini_values['topic-category'], 'iso'):
+            categories.append({'name':cat})
+        #add iso groups, it is supposed to be established within the groups (fields groups and type), what is a group and what is a subgroup.
+        for cat in  gemini_values['topic-category']:
+            categories.append({'name':cat})
 
         package_dict = {
             'title': gemini_values['title'],
             'notes': gemini_values['abstract'],
             'tags': tags,
+            'groups': categories,
             'resources':[]
         }
+        log.debug('Set groups to ' + str(package_dict['groups']))
 
         if self.obj.source.publisher_id:
             package_dict['groups'] = [{'id':self.obj.source.publisher_id}]
@@ -1189,7 +1198,7 @@ class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
         used_identifiers = []
         ids = []
         try:
-            for identifier in self.csw.getidentifiers(limit=100,page=10):
+            for identifier in self.csw.getidentifiers(limit=50,page=10):
                 try:
                     log.info('Got identifier %s from the CSW', identifier)
                     if identifier in used_identifiers:
