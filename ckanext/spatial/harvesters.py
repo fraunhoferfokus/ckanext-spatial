@@ -622,10 +622,7 @@ class GeminiHarvester(SpatialHarvester):
         if terms_of_use is None:
                 return None
 
-        extras['terms_of_use.id'] = terms_of_use['id']
-        extras['terms_of_use.license_url'] = terms_of_use['license_url']
-        extras['terms_of_use.other'] = terms_of_use['other']
-
+        extras['terms_of_use'] = terms_of_use
 
         # Save responsible organization roles
         parties = {}
@@ -743,7 +740,7 @@ class GeminiHarvester(SpatialHarvester):
             if isinstance(value,(basestring,Number)):
                extras_as_dict.append({'key':key,'value':value})
             else:
-               extras_as_dict.append({'key':key,'value':json.dumps(value)})
+               extras_as_dict.append({'key':key,'value':json.dumps(value, ensure_ascii = False)})
 
         package_dict['extras'] = extras_as_dict
 
