@@ -1,3 +1,6 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+
 '''
 Different harvesters for spatial metadata
 
@@ -621,6 +624,16 @@ class GeminiHarvester(SpatialHarvester):
                 return None
 
         extras['terms_of_use'] = terms_of_use
+        
+        # map INSPIRE responsible organisation fields to OGPD contacts
+        publisher = { 'role' : u'Veröffentlichende Stelle', 'name' : '',  'url' : '', 'email' : '',  'address' : '' }
+        owner = { 'role' : u'Ansprechpartner', 'name' : '',  'url' : '', 'email' : '',  'address' : '' }
+
+        if gemini_values['publisher-email']:
+                publisher['email'] = gemini_values['publisher-email']
+                
+        if gemini_values['owner-email']:
+                publisher['email'] = gemini_values['owner-email']
 
         # Save responsible organization roles
         parties = {}
@@ -628,17 +641,20 @@ class GeminiHarvester(SpatialHarvester):
         publishers = []
         for responsible_party in gemini_values['responsible-organisation']:
 
-            if responsible_party['role'] == 'owner':
+            if responsible_party['role'] == 'owner' or responsible_party['role'] == 'pointOfContact':
                 owners.append(responsible_party['organisation-name'])
+                owner['name'] = responsible_party['organisation-name'] 
             elif responsible_party['role'] == 'publisher':
                 publishers.append(responsible_party['organisation-name'])
-
+                publisher['name'] = responsible_party['organisation-name'] 
             if responsible_party['organisation-name'] in parties:
                 if not responsible_party['role'] in parties[responsible_party['organisation-name']]:
                     parties[responsible_party['organisation-name']].append(responsible_party['role'])
             else:
                 parties[responsible_party['organisation-name']] = [responsible_party['role']]
 
+        extras['contacts'] = [ owner, publisher ]
+        
         parties_extra = []
         for party_name in parties:
             parties_extra.append('%s (%s)' % (party_name, ', '.join(parties[party_name])))

@@ -1071,5 +1071,11 @@ class InspireDocument(MappedXmlDocument):
                 if value:
                     break
         values['contact-email'] = value
+        values['owner-email'] = ''
+        values['publisher-email'] = ''
 
-
+        for responsible_party in values['responsible-organisation']:
+                if 'email' in responsible_party['contact-info']:
+                        values['owner-email'] = responsible_party['contact-info']['email']
+                        if responsible_party['role'] == 'publisher':
+                                values['publisher-email'] = responsible_party['contact-info']['email']
