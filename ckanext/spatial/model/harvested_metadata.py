@@ -950,6 +950,12 @@ class InspireDocument(MappedXmlDocument):
             name="resource-locator",
             search_paths=[
                 "gmd:distributionInfo/gmd:MD_Distribution/gmd:transferOptions/gmd:MD_DigitalTransferOptions/gmd:onLine/gmd:CI_OnlineResource",
+            ],
+            multiplicity="*",
+        ),
+        GeminiResourceLocator(
+            name="service-locator",
+            search_paths=[
                 "gmd:identificationInfo/srv:SV_ServiceIdentification/srv:containsOperations/srv:SV_OperationMetadata/srv:connectPoint/gmd:CI_OnlineResource",
             ],
             multiplicity="*",

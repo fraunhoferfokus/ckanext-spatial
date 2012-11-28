@@ -52,10 +52,9 @@ from ckanext.spatial.model import GeminiDocument, InspireDocument
 from ckanext.spatial.lib.csw_client import CswService
 from ckanext.spatial.lib.groupmap import Util
 from ckanext.spatial.validation import Validators, all_validators
-from ckan.lib.dictization.model_save import package_dict_save
-from ckan.forms import package_dict
 
 import ckanext.spatial.lib.license_map
+from urllib2 import HTTPError
 
 
 log = logging.getLogger(__name__)
@@ -505,7 +504,7 @@ class GeminiHarvester(SpatialHarvester):
     
     
             assert gemini_guid == [e['value'] for e in package['extras'] if e['key'] == 'guid'][0]
-            assert self.obj.id == [e['value'] for e in package['extras'] if e['key'] ==  'harvest_object_id'][0]
+            assert self.obj.id == [e['value'] for e in package['extras'] if e['key'] == 'harvest_object_id'][0]
     
             return package
 
@@ -530,6 +529,18 @@ class GeminiHarvester(SpatialHarvester):
             if 'text/html' in headers:
                 log.info("%s is html page" %url)
                 return True
+    
+    
+    def _is_probably_wms(self, url):
+        log.info('try to open url: %s' %url)
+        try:
+            urllib2.urlopen(url)
+        except HTTPError :
+            return False
+        else:
+            # status code is 200
+            # accept this URL as WMS
+            return True
     
     
     def write_package_from_inspire_string(self, content):
@@ -651,8 +662,8 @@ class GeminiHarvester(SpatialHarvester):
         extras['terms_of_use'] = terms_of_use
         
         # map INSPIRE responsible organisation fields to OGPD contacts
-        publisher = { 'role' : u'Veröffentlichende Stelle', 'name' : '',  'url' : '', 'email' : '',  'address' : '' }
-        owner = { 'role' : u'Ansprechpartner', 'name' : '',  'url' : '', 'email' : '',  'address' : '' }
+        publisher = { 'role' : u'Veröffentlichende Stelle', 'name' : '', 'url' : '', 'email' : '', 'address' : '' }
+        owner = { 'role' : u'Ansprechpartner', 'name' : '', 'url' : '', 'email' : '', 'address' : '' }
 
         if gemini_values['publisher-email']:
                 publisher['email'] = gemini_values['publisher-email']
@@ -726,6 +737,11 @@ class GeminiHarvester(SpatialHarvester):
             'groups': categories,
             'resources':[]
         }
+        
+        #copy license_id to ckan-core license id
+        package_dict['license_id'] = extras['terms_of_use']['license_id']
+        log.debug('Set license_id to %s' %package_dict['license_id'])
+        
         log.debug('Set groups to ' + str(package_dict['groups']))
 
         if self.obj.source.publisher_id:
@@ -754,19 +770,14 @@ class GeminiHarvester(SpatialHarvester):
                 if url:
                     resource_format = ''
                     resource = {}
-                    #if extras['resource-type'] == 'service':
-                    # Check if the service is a view service
-                    #test_url = url.split('?')[0] if '?' in url else url
                     if self._is_htm_or_html(url):
                         continue
                     if self._is_pdf_URI(url):
-                        resource_format= 'pdf'
+                        resource_format = 'PDF'
                     elif self._is_wms(url):
                         resource['verified'] = True
                         resource['verified_date'] = datetime.now().isoformat()
                         resource_format = 'WMS'
-                    else:
-                        log.info('Invalid WMS Service!')
                     resource.update(
                         {
                             'url': url,
@@ -775,6 +786,38 @@ class GeminiHarvester(SpatialHarvester):
                             'format': resource_format or None,
                             'resource_locator_protocol': resource_locator.get('protocol',''),
                             'resource_locator_function':resource_locator.get('function','')
+
+                        })
+                    package_dict['resources'].append(resource)
+                    
+                    resource_locators = gemini_values.get('resource-locator', [])
+
+        service_locators = gemini_values.get('service-locator', [])
+        
+        if len(service_locators):
+            log.info("Found %s service points" % len(resource_locators))
+            for service_locator in service_locators:
+                url = service_locator.get('url', '')
+                if url:
+                    service_format = ''
+                    resource = {}
+                    if self._is_wms(url):
+                        resource['verified'] = True
+                        resource['verified_date'] = datetime.now().isoformat()
+                        service_format = 'WMS'
+                    elif self._is_probably_wms(url):
+                        # check if wms is alive
+                        service_format = 'WMS'
+                    else:
+                        log.info('Invalid WMS Service!')
+                    resource.update(
+                        {
+                            'url': url,
+                            'name': service_locator.get('name',''),
+                            'description': service_locator.get('description') if service_locator.get('description') else 'Resource locator',
+                            'format': service_format or None,
+                            'resource_locator_protocol': service_locator.get('protocol',''),
+                            'resource_locator_function':service_locator.get('function','')
 
                         })
                     package_dict['resources'].append(resource)
@@ -804,15 +847,15 @@ class GeminiHarvester(SpatialHarvester):
             return None
         else:
             is_a_document = True
-            for resource in package_dict['resources']:
-                if resource['format'] != 'pdf':
-                    is_a_document = False
+            # check if any resource has a format not equal to 'PDf'
+            if [resource for resource in package_dict['resources'] if resource['format'] != 'PDF' ]:
+                is_a_document = False
+            
             if is_a_document:
                 package_dict['type'] = 'dokument'
             else:
                 package_dict['type'] = 'datensatz'
                 
-            log.info("type is %s" %package_dict['type'])
             if package == None:
                 # Create new package from data.
                 package = self._create_package_from_data(package_dict)
@@ -845,9 +888,10 @@ class GeminiHarvester(SpatialHarvester):
     
     
             assert gemini_guid == [e['value'] for e in package['extras'] if e['key'] == 'guid'][0]
-            assert self.obj.id == [e['value'] for e in package['extras'] if e['key'] ==  'harvest_object_id'][0]
+            assert self.obj.id == [e['value'] for e in package['extras'] if e['key'] == 'harvest_object_id'][0]
     
             return package
+        
     def gen_new_name(self, title):
         name = munge_title_to_name(title).replace('_', '-')
         while '--' in name:
@@ -1261,7 +1305,7 @@ class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
         used_identifiers = []
         ids = []
         try:
-            for identifier in self.csw.getidentifiers(limit=50,page=10):
+            for identifier in self.csw.getidentifiers(limit=100, page=10):
                 try:
                     log.info('Got identifier %s from the CSW', identifier)
                     if identifier in used_identifiers:
