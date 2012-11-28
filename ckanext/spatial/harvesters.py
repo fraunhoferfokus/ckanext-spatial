@@ -1,3 +1,6 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+
 '''
 Different harvesters for spatial metadata
 
@@ -47,9 +50,13 @@ from ckanext.harvest.model import HarvestObject, HarvestGatherError, \
 
 from ckanext.spatial.model import GeminiDocument, InspireDocument
 from ckanext.spatial.lib.csw_client import CswService
+from ckanext.spatial.lib.groupmap import Util
 from ckanext.spatial.validation import Validators, all_validators
 from ckan.lib.dictization.model_save import package_dict_save
 from ckan.forms import package_dict
+
+import ckanext.spatial.lib.license_map
+
 
 log = logging.getLogger(__name__)
 
@@ -621,11 +628,11 @@ class GeminiHarvester(SpatialHarvester):
             'contact-email',
             'frequency-of-update',
             'spatial-data-service-type',
-            'access-constraints',
-            'use-constraints',
-            'other-constraints'
         ]:
             extras[name] = gemini_values[name]
+        
+        extras['subgroups'] = gemini_values['topic-category']
+        log.debug('Set subgroups: ' + str(gemini_values['topic-category']))
 
         if gemini_values.has_key('temporal-extent-begin'):
             #gemini_values['temporal-extent-begin'].sort()
@@ -634,23 +641,45 @@ class GeminiHarvester(SpatialHarvester):
             #gemini_values['temporal-extent-end'].sort()
             extras['temporal_coverage-to'] = gemini_values['temporal-extent-end']
 
+        # map INSPIRE constraint fields to OGPD license fields
+        terms_of_use = ckanext.spatial.lib.license_map.translate_license_data(gemini_values)
+
+        # terms of use == null indicates to drop the entry completely
+        if terms_of_use is None:
+                return None
+
+        extras['terms_of_use'] = terms_of_use
+        
+        # map INSPIRE responsible organisation fields to OGPD contacts
+        publisher = { 'role' : u'Veröffentlichende Stelle', 'name' : '',  'url' : '', 'email' : '',  'address' : '' }
+        owner = { 'role' : u'Ansprechpartner', 'name' : '',  'url' : '', 'email' : '',  'address' : '' }
+
+        if gemini_values['publisher-email']:
+                publisher['email'] = gemini_values['publisher-email']
+                
+        if gemini_values['owner-email']:
+                publisher['email'] = gemini_values['owner-email']
+
         # Save responsible organization roles
         parties = {}
         owners = []
         publishers = []
         for responsible_party in gemini_values['responsible-organisation']:
 
-            if responsible_party['role'] == 'owner':
+            if responsible_party['role'] == 'owner' or responsible_party['role'] == 'pointOfContact':
                 owners.append(responsible_party['organisation-name'])
+                owner['name'] = responsible_party['organisation-name'] 
             elif responsible_party['role'] == 'publisher':
                 publishers.append(responsible_party['organisation-name'])
-
+                publisher['name'] = responsible_party['organisation-name'] 
             if responsible_party['organisation-name'] in parties:
                 if not responsible_party['role'] in parties[responsible_party['organisation-name']]:
                     parties[responsible_party['organisation-name']].append(responsible_party['role'])
             else:
                 parties[responsible_party['organisation-name']] = [responsible_party['role']]
 
+        extras['contacts'] = [ owner, publisher ]
+        
         parties_extra = []
         for party_name in parties:
             parties_extra.append('%s (%s)' % (party_name, ', '.join(parties[party_name])))
@@ -680,13 +709,24 @@ class GeminiHarvester(SpatialHarvester):
         for tag in gemini_values['tags']:
             tag = tag[:50] if len(tag) > 50 else tag
             tags.append({'name':tag})
+        
+        #add groups (mapped from ISO 19115 into OGD schema)      
+        u = Util()
+        categories = []
+        for cat in  u.translate(gemini_values['topic-category'], 'iso'):
+            categories.append({'name':cat})
+        #add iso groups, it is supposed to be established within the groups (fields groups and type), what is a group and what is a subgroup.
+        for cat in  gemini_values['topic-category']:
+            categories.append({'name':cat})
 
         package_dict = {
             'title': gemini_values['title'],
             'notes': gemini_values['abstract'],
             'tags': tags,
+            'groups': categories,
             'resources':[]
         }
+        log.debug('Set groups to ' + str(package_dict['groups']))
 
         if self.obj.source.publisher_id:
             package_dict['groups'] = [{'id':self.obj.source.publisher_id}]
@@ -751,9 +791,9 @@ class GeminiHarvester(SpatialHarvester):
         extras_as_dict = []
         for key,value in extras.iteritems():
             if isinstance(value,(basestring,Number)):
-                extras_as_dict.append({'key':key,'value':value})
+               extras_as_dict.append({'key':key,'value':value})
             else:
-                extras_as_dict.append({'key':key,'value':json.dumps(value)})
+               extras_as_dict.append({'key':key,'value':json.dumps(value, ensure_ascii = False)})
 
         package_dict['extras'] = extras_as_dict
 
@@ -1221,7 +1261,7 @@ class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
         used_identifiers = []
         ids = []
         try:
-            for identifier in self.csw.getidentifiers(limit=100,page=10):
+            for identifier in self.csw.getidentifiers(limit=50,page=10):
                 try:
                     log.info('Got identifier %s from the CSW', identifier)
                     if identifier in used_identifiers:
