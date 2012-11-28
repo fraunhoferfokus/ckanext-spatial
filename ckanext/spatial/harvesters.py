@@ -48,6 +48,8 @@ from ckanext.harvest.model import HarvestObject, HarvestGatherError, \
 from ckanext.spatial.model import GeminiDocument, InspireDocument
 from ckanext.spatial.lib.csw_client import CswService
 from ckanext.spatial.validation import Validators, all_validators
+from ckan.lib.dictization.model_save import package_dict_save
+from ckan.forms import package_dict
 
 log = logging.getLogger(__name__)
 
@@ -500,6 +502,29 @@ class GeminiHarvester(SpatialHarvester):
     
             return package
 
+
+    def _is_pdf_URI(self, url):
+        if url.endswith(".pdf"):
+            return True
+        else:
+            req = urllib2.urlopen(url)
+            headers = req.headers['content-type']
+            #TODO application/octet-stream isbinary, accept as pdf?
+            return 'application/pdf' in headers
+    
+    def _is_htm_or_html(self, url):
+        if url.endswith('.htm') or url.endswith('html'):
+            log.info("%s is html page" %url)
+            return True
+        else:
+            log.info('try to open url: %s' %url)
+            req = urllib2.urlopen(url)
+            headers = req.headers['content-type']
+            if 'text/html' in headers:
+                log.info("%s is html page" %url)
+                return True
+    
+    
     def write_package_from_inspire_string(self, content):
         '''Create or update a package based on fetched INSPIRE content'''
 
@@ -691,14 +716,17 @@ class GeminiHarvester(SpatialHarvester):
                     resource = {}
                     #if extras['resource-type'] == 'service':
                     # Check if the service is a view service
-                    test_url = url.split('?')[0] if '?' in url else url
-                    if self._is_wms(test_url):
+                    #test_url = url.split('?')[0] if '?' in url else url
+                    if self._is_htm_or_html(url):
+                        continue
+                    if self._is_pdf_URI(url):
+                        resource_format= 'pdf'
+                    elif self._is_wms(url):
                         resource['verified'] = True
                         resource['verified_date'] = datetime.now().isoformat()
                         resource_format = 'WMS'
                     else:
                         log.info('Invalid WMS Service!')
-
                     resource.update(
                         {
                             'url': url,
@@ -735,6 +763,16 @@ class GeminiHarvester(SpatialHarvester):
             self._save_object_error(out,self.obj,'Import')
             return None
         else:
+            is_a_document = True
+            for resource in package_dict['resources']:
+                if resource['format'] != 'pdf':
+                    is_a_document = False
+            if is_a_document:
+                package_dict['type'] = 'dokument'
+            else:
+                package_dict['type'] = 'datensatz'
+                
+            log.info("type is %s" %package_dict['type'])
             if package == None:
                 # Create new package from data.
                 package = self._create_package_from_data(package_dict)

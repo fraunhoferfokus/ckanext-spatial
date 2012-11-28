@@ -98,7 +98,7 @@ class CswService(OwsService):
             "keywords": keywords,
             "typenames": typenames,
             "esn": esn,
-            "startposition": 0,
+            "startposition": 50,
             "maxrecords": page,
             "outputschema": namespaces[outputschema],
             }
