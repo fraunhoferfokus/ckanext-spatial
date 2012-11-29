@@ -21,6 +21,7 @@ from datetime import datetime
 from string import Template
 from numbers import Number
 import sys
+import re
 import uuid
 import os
 import logging
@@ -716,9 +717,11 @@ class GeminiHarvester(SpatialHarvester):
 
         extras['spatial'] = extent_string.strip()
 
+        # Only [a-zA-Z0-9-_] is allowed, filter every other character
         tags = []
         for tag in gemini_values['tags']:
             tag = tag[:50] if len(tag) > 50 else tag
+            tag = re.sub('[^a-zA-Z0-9-_ ]*', '', tag)
             tags.append({'name':tag})
         
         #add groups (mapped from ISO 19115 into OGD schema)      

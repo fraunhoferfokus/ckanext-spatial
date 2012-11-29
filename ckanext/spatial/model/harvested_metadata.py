@@ -1,4 +1,5 @@
 from lxml import etree
+from HTMLParser import HTMLParser
     
 import logging
 log = logging.getLogger(__name__)
@@ -21,6 +22,10 @@ class MappedXmlDocument(MappedXmlObject):
         tree = self.get_xml_tree()
         for element in self.elements:
             values[element.name] = element.read_value(tree)
+
+            # unescape HTML/XML references
+            values[element.name] = HTMLParser().unescape(values[element.name])
+            
         self.infer_values(values)
         return values
 
