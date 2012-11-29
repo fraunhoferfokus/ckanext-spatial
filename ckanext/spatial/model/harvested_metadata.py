@@ -17,7 +17,7 @@ class MappedXmlDocument(MappedXmlObject):
 
     def read_values(self):
         '''For all of the elements listed, finds the values of them in the
-        XML and returns them.'''
+XML and returns them.'''
         values = {}
         tree = self.get_xml_tree()
         for element in self.elements:
@@ -31,8 +31,8 @@ class MappedXmlDocument(MappedXmlObject):
 
     def read_value(self, name):
         '''For the given element name, find the value in the XML and return
-        it.
-        '''
+it.
+'''
         tree = self.get_xml_tree()
         for element in self.elements:
             if element.name == name:
@@ -175,11 +175,46 @@ class GeminiResponsibleParty(GeminiElement):
                 "gmd:contactInfo/gmd:CI_Contact",
             ],
             multiplicity="0..1",
-            elements = [
+            elements=[
                 GeminiElement(
                     name="email",
                     search_paths=[
                         "gmd:address/gmd:CI_Address/gmd:electronicMailAddress/gco:CharacterString/text()",
+                    ],
+                    multiplicity="0..1",
+                ),
+                GeminiElement(
+                    name="deliveryPoint",
+                    search_paths=[
+                        "gmd:address/gmd:CI_Address/gmd:deliveryPoint/gco:CharacterString/text()",
+                    ],
+                    multiplicity="0..1",
+                ),
+                GeminiElement(
+                    name="city",
+                    search_paths=[
+                        "gmd:address/gmd:CI_Address/gmd:city/gco:CharacterString/text()",
+                    ],
+                    multiplicity="0..1",
+                ),
+                GeminiElement(
+                    name="adminitrativeArea",
+                    search_paths=[
+                        "gmd:address/gmd:CI_Address/gmd:adminitrativeArea/gco:CharacterString/text()",
+                    ],
+                    multiplicity="0..1",
+                ),
+                GeminiElement(
+                    name="postalCode",
+                    search_paths=[
+                        "gmd:address/gmd:CI_Address/gmd:postalCode/gco:CharacterString/text()",
+                    ],
+                    multiplicity="0..1",
+                ),
+                GeminiElement(
+                    name="country",
+                    search_paths=[
+                        "gmd:address/gmd:CI_Address/gmd:country/gco:CharacterString/text()",
                     ],
                     multiplicity="0..1",
                 ),
@@ -191,7 +226,7 @@ class GeminiResponsibleParty(GeminiElement):
                 "gmd:role/gmd:CI_RoleCode/@codeListValue",
             ],
             multiplicity="0..1",
-        ),
+        ),        
     ]
 
 
@@ -378,15 +413,15 @@ class GeminiDocument(MappedXmlDocument):
             ],
             multiplicity="*",
         ),
-        ## Todo: Suggestion from PP not to bother pulling this into the package.
-        #GeminiElement(
-        #    name="unique-resource-identifier",
-        #    search_paths=[
-        #        "gmd:identificationInfo/gmd:MD_DataIdentification/gmd:citation/gmd:CI_Citation/gmd:identifier/gmd:RS_Identifier",
-        #        "gmd:identificationInfo/srv:SV_ServiceIdentification/gmd:citation/gmd:CI_Citation/gmd:identifier/gmd:RS_Identifier",
-        #    ],
-        #    multiplicity="1",
-        #),
+        # # Todo: Suggestion from PP not to bother pulling this into the package.
+        # GeminiElement(
+        # name="unique-resource-identifier",
+        # search_paths=[
+        # "gmd:identificationInfo/gmd:MD_DataIdentification/gmd:citation/gmd:CI_Citation/gmd:identifier/gmd:RS_Identifier",
+        # "gmd:identificationInfo/srv:SV_ServiceIdentification/gmd:citation/gmd:CI_Citation/gmd:identifier/gmd:RS_Identifier",
+        # ],
+        # multiplicity="1",
+        # ),
         GeminiElement(
             name="abstract",
             search_paths=[
@@ -469,14 +504,14 @@ class GeminiDocument(MappedXmlDocument):
             ],
             multiplicity="0..1",
         ),
-        #GeminiElement(
-        #    name="spatial-resolution-units",
-        #    search_paths=[
-        #        "gmd:identificationInfo/gmd:MD_DataIdentification/gmd:spatialResolution/gmd:MD_Resolution/gmd:distance/gco:Distance/@uom",
-        #        "gmd:identificationInfo/srv:SV_ServiceIdentification/gmd:spatialResolution/gmd:MD_Resolution/gmd:distance/gco:Distance/@uom",
-        #    ],
-        #    multiplicity="0..1",
-        #),
+        # GeminiElement(
+        # name="spatial-resolution-units",
+        # search_paths=[
+        # "gmd:identificationInfo/gmd:MD_DataIdentification/gmd:spatialResolution/gmd:MD_Resolution/gmd:distance/gco:Distance/@uom",
+        # "gmd:identificationInfo/srv:SV_ServiceIdentification/gmd:spatialResolution/gmd:MD_Resolution/gmd:distance/gco:Distance/@uom",
+        # ],
+        # multiplicity="0..1",
+        # ),
         GeminiElement(
             name="equivalent-scale",
             search_paths=[
@@ -580,13 +615,13 @@ class GeminiDocument(MappedXmlDocument):
             ],
             multiplicity="*",
         ),
-#        GeminiElement(
-#            name="coupled-resource",
-#            search_paths=[
-#                "gmd:identificationInfo/srv:SV_ServiceIdentification/srv:operatesOn/@xlink:href",
-#            ],
-#            multiplicity="*",
-#        ),
+# GeminiElement(
+# name="coupled-resource",
+# search_paths=[
+# "gmd:identificationInfo/srv:SV_ServiceIdentification/srv:operatesOn/@xlink:href",
+# ],
+# multiplicity="*",
+# ),
         GeminiElement(
             name="additional-information-source",
             search_paths=[
@@ -712,15 +747,15 @@ class InspireDocument(MappedXmlDocument):
             ],
             multiplicity="*",
         ),
-        ## Todo: Suggestion from PP not to bother pulling this into the package.
-        #GeminiElement(
-        #    name="unique-resource-identifier",
-        #    search_paths=[
-        #        "gmd:identificationInfo/gmd:MD_DataIdentification/gmd:citation/gmd:CI_Citation/gmd:identifier/gmd:RS_Identifier",
-        #        "gmd:identificationInfo/srv:SV_ServiceIdentification/gmd:citation/gmd:CI_Citation/gmd:identifier/gmd:RS_Identifier",
-        #    ],
-        #    multiplicity="1",
-        #),
+        # # Todo: Suggestion from PP not to bother pulling this into the package.
+        # GeminiElement(
+        # name="unique-resource-identifier",
+        # search_paths=[
+        # "gmd:identificationInfo/gmd:MD_DataIdentification/gmd:citation/gmd:CI_Citation/gmd:identifier/gmd:RS_Identifier",
+        # "gmd:identificationInfo/srv:SV_ServiceIdentification/gmd:citation/gmd:CI_Citation/gmd:identifier/gmd:RS_Identifier",
+        # ],
+        # multiplicity="1",
+        # ),
         GeminiElement(
             name="abstract",
             search_paths=[
@@ -819,14 +854,14 @@ class InspireDocument(MappedXmlDocument):
             ],
             multiplicity="0..1",
         ),
-        #GeminiElement(
-        #    name="spatial-resolution-units",
-        #    search_paths=[
-        #        "gmd:identificationInfo/gmd:MD_DataIdentification/gmd:spatialResolution/gmd:MD_Resolution/gmd:distance/gco:Distance/@uom",
-        #        "gmd:identificationInfo/srv:SV_ServiceIdentification/gmd:spatialResolution/gmd:MD_Resolution/gmd:distance/gco:Distance/@uom",
-        #    ],
-        #    multiplicity="0..1",
-        #),
+        # GeminiElement(
+        # name="spatial-resolution-units",
+        # search_paths=[
+        # "gmd:identificationInfo/gmd:MD_DataIdentification/gmd:spatialResolution/gmd:MD_Resolution/gmd:distance/gco:Distance/@uom",
+        # "gmd:identificationInfo/srv:SV_ServiceIdentification/gmd:spatialResolution/gmd:MD_Resolution/gmd:distance/gco:Distance/@uom",
+        # ],
+        # multiplicity="0..1",
+        # ),
         GeminiElement(
             name="equivalent-scale",
             search_paths=[
@@ -930,13 +965,13 @@ class InspireDocument(MappedXmlDocument):
             ],
             multiplicity="*",
         ),
-#        GeminiElement(
-#            name="coupled-resource",
-#            search_paths=[
-#                "gmd:identificationInfo/srv:SV_ServiceIdentification/srv:operatesOn/@xlink:href",
-#            ],
-#            multiplicity="*",
-#        ),
+# GeminiElement(
+# name="coupled-resource",
+# search_paths=[
+# "gmd:identificationInfo/srv:SV_ServiceIdentification/srv:operatesOn/@xlink:href",
+# ],
+# multiplicity="*",
+# ),
         GeminiElement(
             name="additional-information-source",
             search_paths=[
@@ -1006,6 +1041,8 @@ class InspireDocument(MappedXmlDocument):
         self.infer_publisher(values)
         self.infer_contact(values)
         self.infer_contact_email(values)
+        #self.infer_address(values)
+        
         return values
 
     def infer_date_released(self, values):
@@ -1071,6 +1108,59 @@ class InspireDocument(MappedXmlDocument):
             if value:
                 break
         values['contact'] = value
+        
+    def infer_address(self, values):
+        country = ''
+        city = ''
+        deliveryPoint = ''
+        adminitrativeArea = ''
+        postalCode = ''
+        address = ''
+        for responsible_party in values['responsible-organisation']:
+            if isinstance(responsible_party, dict) and \
+               isinstance(responsible_party.get('contact-info'), dict):
+                
+               
+                if responsible_party['contact-info'].has_key('country'):
+                    country = responsible_party['contact-info']['country']
+                    
+                if responsible_party['contact-info'].has_key('city'):
+                    city = responsible_party['contact-info']['city']
+                    
+                if responsible_party['contact-info'].has_key('adminitrativeArea'):
+                    adminitrativeArea = responsible_party['contact-info']['adminitrativeArea']    
+  
+                if responsible_party['contact-info'].has_key('deliveryPoint'):
+                    deliveryPoint = responsible_party['contact-info']['deliveryPoint'] 
+                    
+                if responsible_party['contact-info'].has_key('postalCode'):
+                    postalCode = responsible_party['contact-info']['postalCode'] 
+                                       
+                if deliveryPoint and postalCode:
+                    
+                    if deliveryPoint:
+                        address = deliveryPoint
+                    
+                    if postalCode:
+                        address = address + ', ' + postalCode
+                        
+                    if city:
+                        address = address + ', ' + city
+                        
+                    if adminitrativeArea:
+                        address = address + ', ' + adminitrativeArea
+                        
+                    if country:
+                        address = address + ', ' + country
+                        
+                    if responsible_party['role'] == 'publisher':
+                        values['publisher-address'] = address 
+                    else:
+                        if responsible_party['role'] == 'owner':
+                            values['owner-address'] = address
+                        else:
+                            values['contact-address'] = address
+                        
 
     def infer_contact_email(self, values):
         value = ''
