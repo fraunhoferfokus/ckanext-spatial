@@ -222,7 +222,7 @@ class GeminiHarvester(SpatialHarvester):
 
         package = self.write_package_from_gemini_string(unicode_gemini_string)
 
-    def import_inspire_object(self, gemini_string):
+    def import_inspire_object(self, gemini_string,harvest_object):
         log = logging.getLogger(__name__ + '.import')
         xml = etree.fromstring(gemini_string)
 
@@ -234,7 +234,7 @@ class GeminiHarvester(SpatialHarvester):
 
         unicode_inspire_string = etree.tostring(xml, encoding=unicode, pretty_print=True)
 
-        package = self.write_package_from_inspire_string(unicode_inspire_string)
+        package = self.write_package_from_inspire_string(unicode_inspire_string,harvest_object)
 
     def write_package_from_gemini_string(self, content):
         '''Create or update a Package based on some content that has
@@ -544,7 +544,7 @@ class GeminiHarvester(SpatialHarvester):
             return True
     
     
-    def write_package_from_inspire_string(self, content):
+    def write_package_from_inspire_string(self, content, harvest_object):
         '''Create or update a package based on fetched INSPIRE content'''
 
         log = logging.getLogger(__name__ + '.import')
@@ -646,27 +646,27 @@ class GeminiHarvester(SpatialHarvester):
         #map given dates to OGPD date fields
         ogpd_date_created = { 'role' : u'erstellt',  'date' : ''}
         ogpd_date_released = { 'role' : u'veroeffentlicht', 'date' : ''}
-        result = []
+        dates = []
         
         if gemini_values['date-released']:
             ogpd_date_released['date'] = gemini_values['date-released']    
         else:
             ogpd_date_released['date'] = gemini_values['metadata-date']  
         
-        result.append(ogpd_date_released)     
+        dates.append(ogpd_date_released)     
                            
         if gemini_values['date-updated']:
             for date in gemini_values['date-updated'] :
                 ogpd_date_updated = { 'role' : u'aktualisiert', 'date' : date}
-                result.append(ogpd_date_updated)     
+                dates.append(ogpd_date_updated)     
         
         if gemini_values['date-created']:
             ogpd_date_created['date'] = (gemini_values['date-created']) [0]
-            result.append(ogpd_date_created)
+            dates.append(ogpd_date_created)
              
-        extras['dates']= result
-
- 
+        extras['dates']= dates
+        extras['metadata_original_portal'] = harvest_object.source.url  
+     
  
         extras['subgroups'] = gemini_values['topic-category']
         log.debug('Set subgroups: ' + str(gemini_values['topic-category']))
@@ -1415,7 +1415,7 @@ class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
             self._save_object_error('Empty content for object %s' % harvest_object.id,harvest_object,'Import')
             return False
         try:
-            self.import_inspire_object(harvest_object.content)
+            self.import_inspire_object(harvest_object.content,harvest_object)
             return True
         except Exception, e:
             log.error('Exception during import: %s' % text_traceback())
