@@ -642,7 +642,32 @@ class GeminiHarvester(SpatialHarvester):
             'spatial-data-service-type',
         ]:
             extras[name] = gemini_values[name]
+       
+        #map given dates to OGPD date fields
+        ogpd_date_created = { 'role' : u'erstellt',  'date' : ''}
+        ogpd_date_released = { 'role' : u'veroeffentlicht', 'date' : ''}
+        result = []
         
+        if gemini_values['date-released']:
+            ogpd_date_released['date'] = gemini_values['date-released']    
+        else:
+            ogpd_date_released['date'] = gemini_values['metadata-date']  
+        
+        result.append(ogpd_date_released)     
+                           
+        if gemini_values['date-updated']:
+            for date in gemini_values['date-updated'] :
+                ogpd_date_updated = { 'role' : u'aktualisiert', 'date' : date}
+                result.append(ogpd_date_updated)     
+        
+        if gemini_values['date-created']:
+            ogpd_date_created['date'] = (gemini_values['date-created']) [0]
+            result.append(ogpd_date_created)
+             
+        extras['dates']= result
+
+ 
+ 
         extras['subgroups'] = gemini_values['topic-category']
         log.debug('Set subgroups: ' + str(gemini_values['topic-category']))
 
