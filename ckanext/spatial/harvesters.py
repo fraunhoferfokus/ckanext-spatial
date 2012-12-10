@@ -56,6 +56,7 @@ from ckanext.spatial.validation import Validators, all_validators
 
 import ckanext.spatial.lib.license_map
 from urllib2 import HTTPError
+from urlparse import urlparse
 
 
 log = logging.getLogger(__name__)
@@ -665,7 +666,14 @@ class GeminiHarvester(SpatialHarvester):
             dates.append(ogpd_date_created)
              
         extras['dates']= dates
-        extras['metadata_original_portal'] = harvest_object.source.url  
+        
+        #original metadata information  
+        url_schema = urlparse(harvest_object.source.url)
+        extras['metadata_original_portal'] = url_schema.netloc
+        extras['metadata_original_id'] = gemini_values['guid']
+        
+        csw_request = '?Service=CSW&Request=GetRecordById&Id='
+        extras['metadata_original_xml'] = harvest_object.source.url + csw_request + gemini_values['guid']  
      
  
         extras['subgroups'] = gemini_values['topic-category']
