@@ -785,6 +785,15 @@ class InspireDocument(MappedXmlDocument):
             multiplicity="0..1",
         ),
         GeminiElement(
+            name="frequency-of-update-factor",
+            search_paths=[
+                "gmd:identificationInfo/gmd:MD_DataIdentification/gmd:resourceMaintenance/gmd:MD_MaintenanceInformation/gmd:userDefinedMaintenanceFrequency/gts:TM_PeriodDuration/text()",
+                "gmd:identificationInfo/srv:SV_ServiceIdentification/gmd:resourceMaintenance/gmd:MD_MaintenanceInformation/gmd:userDefinedMaintenanceFrequency/gts:TM_PeriodDuration/text()",
+            ],
+            multiplicity="0..1",
+        ),
+             
+        GeminiElement(
             name="keyword-inspire-theme",
             search_paths=[
                 "gmd:identificationInfo/gmd:MD_DataIdentification/gmd:descriptiveKeywords/gmd:MD_Keywords/gmd:keyword/gco:CharacterString/text()",
@@ -1180,3 +1189,9 @@ class InspireDocument(MappedXmlDocument):
                         values['owner-email'] = responsible_party['contact-info']['email']
                         if responsible_party['role'] == 'publisher':
                                 values['publisher-email'] = responsible_party['contact-info']['email']
+
+
+
+
+
+

@@ -53,6 +53,7 @@ from ckanext.spatial.model import GeminiDocument, InspireDocument
 from ckanext.spatial.lib.csw_client import CswService
 from ckanext.spatial.lib.groupmap import Util
 from ckanext.spatial.validation import Validators, all_validators
+from ckanext.spatial.lib.durationmap import DurationTranslator
 
 import ckanext.spatial.lib.license_map
 from urllib2 import HTTPError
@@ -350,6 +351,8 @@ class GeminiHarvester(SpatialHarvester):
         if gemini_values.has_key('temporal-extent-end'):
             #gemini_values['temporal-extent-end'].sort()
             extras['temporal_coverage-to'] = gemini_values['temporal-extent-end']
+
+
 
         # Save responsible organization roles
         parties = {}
@@ -685,6 +688,42 @@ class GeminiHarvester(SpatialHarvester):
         if gemini_values.has_key('temporal-extent-end'):
             #gemini_values['temporal-extent-end'].sort()
             extras['temporal_coverage-to'] = gemini_values['temporal-extent-end']
+            
+            
+                #temporal granularity information
+        duration_translator = DurationTranslator()      
+        temp_duration = ''
+        temp_factor = ''
+        duration = None
+        
+        if gemini_values.has_key('frequency-of-update'): 
+            temp_duration = duration_translator.translate_duration_data(gemini_values['frequency-of-update'])  
+            
+        if gemini_values.has_key('frequency-of-update-factor'):
+            duration = duration_translator.translate_duration_factor(gemini_values['frequency-of-update-factor'])
+       
+        if temp_duration:
+            extras['temporal_granularity'] = temp_duration         
+            if duration:
+                if duration['duration'] == temp_duration:
+                    temp_factor =  duration['duration_factor']                
+        else:
+            if gemini_values['frequency-of-update'] == 'forthnightly':
+                    temp_duration = 'Tag'
+                    temp_factor = 14   
+            else:
+                if gemini_values['frequency-of-update'] == 'biannually':
+                    temp_duration = 'Monat'
+                    temp_factor = 6            
+                else:
+                    if duration:       
+                        temp_duration = duration['duration']
+                        temp_factor =  duration['duration_factor']                       
+        
+        if temp_duration:
+            extras['temporal_granularity'] = temp_duration 
+        if temp_factor:
+            extras['temporal_granularity_factor'] = temp_factor
 
         # map INSPIRE constraint fields to OGPD license fields
         terms_of_use = ckanext.spatial.lib.license_map.translate_license_data(gemini_values)
@@ -1447,6 +1486,8 @@ class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
 
     def _setup_csw_client(self, url):
         self.csw = CswService(url)
+
+
 
 
 
