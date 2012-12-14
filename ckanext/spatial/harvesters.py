@@ -547,7 +547,70 @@ class GeminiHarvester(SpatialHarvester):
             # accept this URL as WMS
             return True
     
+    def handle_resources(self,resource_locators):
+        ''' Handle all resources except for WMS endpoints '''
+        result = []
+        if len(resource_locators):
+            log.info("Found %s resources" %len(resource_locators))
+            for resource_locator in resource_locators:
+                url = resource_locator.get('url','')
+                if url:
+                    resource_format = ''
+                    resource = {}
+                    if self._is_htm_or_html(url):
+                        continue
+                    if self._is_pdf_URI(url):
+                        resource_format = 'PDF'
+                    elif self._is_wms(url):
+                        resource['verified'] = True
+                        resource['verified_date'] = datetime.now().isoformat()
+                        resource_format = 'WMS'
+                    resource.update(
+                        {
+                            'url': url,
+                            'name': resource_locator.get('name',''),
+                            'description': resource_locator.get('description') if resource_locator.get('description') else (resource_format + ' - Ressource'),
+                            'format': resource_format or None,
+                            'resource_locator_protocol': resource_locator.get('protocol',''),
+                            'resource_locator_function':resource_locator.get('function','')
+
+                        })
+                    result.append(resource)
+        return result
     
+    def handle_services(self,service_locators):
+        ''' Handle WMS endpoints '''
+        result = []
+        if len(service_locators):
+            log.info("Found %s service points" % len(service_locators))
+            for service_locator in service_locators:
+                url = service_locator.get('url', '')
+                if url:
+                    service_format = ''
+                    resource = {}
+                    if self._is_wms(url):
+                        resource['verified'] = True
+                        resource['verified_date'] = datetime.now().isoformat()
+                        service_format = 'WMS'
+                    elif self._is_probably_wms(url):
+                        # check if wms is alive
+                        service_format = 'WMS'
+                    else:
+                        log.info('Invalid WMS Service!')
+                    resource.update(
+                        {
+                            'url': url,
+                            'name': service_locator.get('name',''),
+                            'description': service_locator.get('description') if service_locator.get('description') else 'Ressource',
+                            'format': service_format or None,
+                            'resource_locator_protocol': service_locator.get('protocol',''),
+                            'resource_locator_function':service_locator.get('function','')
+
+                        })
+                    result.append(resource)
+        return result
+
+
     def write_package_from_inspire_string(self, content, harvest_object):
         '''Create or update a package based on fetched INSPIRE content'''
 
@@ -840,66 +903,14 @@ class GeminiHarvester(SpatialHarvester):
             package_dict['name'] = package.name
 
         resource_locators = gemini_values.get('resource-locator', [])
-
-        if len(resource_locators):
-            log.info("Found %s resources" %len(resource_locators))
-            for resource_locator in resource_locators:
-                url = resource_locator.get('url','')
-                if url:
-                    resource_format = ''
-                    resource = {}
-                    if self._is_htm_or_html(url):
-                        continue
-                    if self._is_pdf_URI(url):
-                        resource_format = 'PDF'
-                    elif self._is_wms(url):
-                        resource['verified'] = True
-                        resource['verified_date'] = datetime.now().isoformat()
-                        resource_format = 'WMS'
-                    resource.update(
-                        {
-                            'url': url,
-                            'name': resource_locator.get('name',''),
-                            'description': resource_locator.get('description') if resource_locator.get('description') else (resource_format + ' - Ressource'),
-                            'format': resource_format or None,
-                            'resource_locator_protocol': resource_locator.get('protocol',''),
-                            'resource_locator_function':resource_locator.get('function','')
-
-                        })
-                    package_dict['resources'].append(resource)
-                    
-                    resource_locators = gemini_values.get('resource-locator', [])
+        resources = self.handle_resources(resource_locators)
+        
+        package_dict['resources'].extend(resources)
 
         service_locators = gemini_values.get('service-locator', [])
+        services = self.handle_services(service_locators)
+        package_dict['resources'].extend(services)
         
-        if len(service_locators):
-            log.info("Found %s service points" % len(resource_locators))
-            for service_locator in service_locators:
-                url = service_locator.get('url', '')
-                if url:
-                    service_format = ''
-                    resource = {}
-                    if self._is_wms(url):
-                        resource['verified'] = True
-                        resource['verified_date'] = datetime.now().isoformat()
-                        service_format = 'WMS'
-                    elif self._is_probably_wms(url):
-                        # check if wms is alive
-                        service_format = 'WMS'
-                    else:
-                        log.info('Invalid WMS Service!')
-                    resource.update(
-                        {
-                            'url': url,
-                            'name': service_locator.get('name',''),
-                            'description': service_locator.get('description') if service_locator.get('description') else 'Resource locator',
-                            'format': service_format or None,
-                            'resource_locator_protocol': service_locator.get('protocol',''),
-                            'resource_locator_function':service_locator.get('function','')
-
-                        })
-                    package_dict['resources'].append(resource)
-
             # Guess the best view service to use in WMS preview
             verified_view_resources = [r for r in package_dict['resources'] if 'verified' in r and r['format'] == 'WMS']
             if len(verified_view_resources):
