@@ -696,7 +696,7 @@ class GeminiHarvester(SpatialHarvester):
         extras['terms_of_use'] = terms_of_use
         
         # map INSPIRE responsible organisation fields to OGPD contacts
-        publisher = { 'role' : u'Veröffentlichende Stelle', 'name' : '', 'url' : '', 'email' : '', 'address' : '' }
+        publisher = { 'role' : u'Veröntlichende Stelle', 'name' : '', 'url' : '', 'email' : '', 'address' : '' }
         owner = { 'role' : u'Ansprechpartner', 'name' : '', 'url' : '', 'email' : '', 'address' : '' }
 
         if gemini_values['publisher-email']:
@@ -890,8 +890,18 @@ class GeminiHarvester(SpatialHarvester):
             if is_a_document:
                 package_dict['type'] = 'dokument'
             else:
-                package_dict['type'] = 'datensatz'
-                
+                if 'service' in gemini_values['resource-type'] or 'application' in gemini_values['resource-type'] :
+                    package_dict['type'] = 'app'
+                else:
+                    if 'document' in gemini_values['resource-type']:
+                        package_dict['type'] = 'dokument'            
+                    else:
+                        if 'dataset' in gemini_values['resource-type'] or 'nonGeographicDataset' in gemini_values['resource-type'] or 'database' in gemini_values['resource-type'] or  'series' in gemini_values['resource-type']:
+                            package_dict['type'] = 'datensatz'
+                        else:
+                            package_dict['type'] = 'dokument'
+                            
+                                 
             if package == None:
                 # Create new package from data.
                 package = self._create_package_from_data(package_dict)
@@ -1437,3 +1447,9 @@ class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
 
     def _setup_csw_client(self, url):
         self.csw = CswService(url)
+
+
+
+
+
+
