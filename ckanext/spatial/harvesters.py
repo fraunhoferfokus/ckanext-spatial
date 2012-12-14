@@ -21,6 +21,7 @@ from datetime import datetime
 from string import Template
 from numbers import Number
 import sys
+import re
 import uuid
 import os
 import tempfile
@@ -53,11 +54,11 @@ from ckanext.spatial.model import GeminiDocument, InspireDocument
 from ckanext.spatial.lib.csw_client import CswService
 from ckanext.spatial.lib.groupmap import Util
 from ckanext.spatial.validation import Validators, all_validators
+from ckanext.spatial.lib.durationmap import DurationTranslator
 
 import ckanext.spatial.lib.license_map
 from urllib2 import HTTPError
-import tempfile
-
+from urlparse import urlparse
 
 log = logging.getLogger(__name__)
 
@@ -223,7 +224,7 @@ class GeminiHarvester(SpatialHarvester):
 
         package = self.write_package_from_gemini_string(unicode_gemini_string)
 
-    def import_inspire_object(self, gemini_string):
+    def import_inspire_object(self, gemini_string,harvest_object):
         log = logging.getLogger(__name__ + '.import')
         xml = etree.fromstring(gemini_string)
 
@@ -235,7 +236,7 @@ class GeminiHarvester(SpatialHarvester):
 
         unicode_inspire_string = etree.tostring(xml, encoding=unicode, pretty_print=True)
 
-        package = self.write_package_from_inspire_string(unicode_inspire_string)
+        package = self.write_package_from_inspire_string(unicode_inspire_string,harvest_object)
 
     def write_package_from_gemini_string(self, content):
         '''Create or update a Package based on some content that has
@@ -350,6 +351,8 @@ class GeminiHarvester(SpatialHarvester):
         if gemini_values.has_key('temporal-extent-end'):
             #gemini_values['temporal-extent-end'].sort()
             extras['temporal_coverage-to'] = gemini_values['temporal-extent-end']
+
+
 
         # Save responsible organization roles
         parties = {}
@@ -545,7 +548,7 @@ class GeminiHarvester(SpatialHarvester):
             return True
     
     
-    def write_package_from_inspire_string(self, content):
+    def write_package_from_inspire_string(self, content, harvest_object):
         '''Create or update a package based on fetched INSPIRE content'''
 
         log = logging.getLogger(__name__ + '.import')
@@ -643,7 +646,39 @@ class GeminiHarvester(SpatialHarvester):
             'spatial-data-service-type',
         ]:
             extras[name] = gemini_values[name]
+       
+        #map given dates to OGPD date fields
+        ogpd_date_created = { 'role' : u'erstellt',  'date' : ''}
+        ogpd_date_released = { 'role' : u'veroeffentlicht', 'date' : ''}
+        dates = []
         
+        if gemini_values['date-released']:
+            ogpd_date_released['date'] = gemini_values['date-released']    
+        else:
+            ogpd_date_released['date'] = gemini_values['metadata-date']  
+        
+        dates.append(ogpd_date_released)     
+                           
+        if gemini_values['date-updated']:
+            for date in gemini_values['date-updated'] :
+                ogpd_date_updated = { 'role' : u'aktualisiert', 'date' : date}
+                dates.append(ogpd_date_updated)     
+        
+        if gemini_values['date-created']:
+            ogpd_date_created['date'] = (gemini_values['date-created']) [0]
+            dates.append(ogpd_date_created)
+             
+        extras['dates']= dates
+        
+        #original metadata information  
+        url_schema = urlparse(harvest_object.source.url)
+        extras['metadata_original_portal'] = url_schema.netloc
+        extras['metadata_original_id'] = gemini_values['guid']
+        
+        csw_request = '?Service=CSW&Request=GetRecordById&Id='
+        extras['metadata_original_xml'] = harvest_object.source.url + csw_request + gemini_values['guid']  
+     
+ 
         extras['subgroups'] = gemini_values['topic-category']
         log.debug('Set subgroups: ' + str(gemini_values['topic-category']))
 
@@ -653,6 +688,42 @@ class GeminiHarvester(SpatialHarvester):
         if gemini_values.has_key('temporal-extent-end'):
             #gemini_values['temporal-extent-end'].sort()
             extras['temporal_coverage-to'] = gemini_values['temporal-extent-end']
+            
+            
+                #temporal granularity information
+        duration_translator = DurationTranslator()      
+        temp_duration = ''
+        temp_factor = ''
+        duration = None
+        
+        if gemini_values.has_key('frequency-of-update'): 
+            temp_duration = duration_translator.translate_duration_data(gemini_values['frequency-of-update'])  
+            
+        if gemini_values.has_key('frequency-of-update-factor'):
+            duration = duration_translator.translate_duration_factor(gemini_values['frequency-of-update-factor'])
+       
+        if temp_duration:
+            extras['temporal_granularity'] = temp_duration         
+            if duration:
+                if duration['duration'] == temp_duration:
+                    temp_factor =  duration['duration_factor']                
+        else:
+            if gemini_values['frequency-of-update'] == 'forthnightly':
+                    temp_duration = 'Tag'
+                    temp_factor = 14   
+            else:
+                if gemini_values['frequency-of-update'] == 'biannually':
+                    temp_duration = 'Monat'
+                    temp_factor = 6            
+                else:
+                    if duration:       
+                        temp_duration = duration['duration']
+                        temp_factor =  duration['duration_factor']                       
+        
+        if temp_duration:
+            extras['temporal_granularity'] = temp_duration 
+        if temp_factor:
+            extras['temporal_granularity_factor'] = temp_factor
 
         # map INSPIRE constraint fields to OGPD license fields
         terms_of_use = ckanext.spatial.lib.license_map.translate_license_data(gemini_values)
@@ -664,7 +735,7 @@ class GeminiHarvester(SpatialHarvester):
         extras['terms_of_use'] = terms_of_use
         
         # map INSPIRE responsible organisation fields to OGPD contacts
-        publisher = { 'role' : u'Veröffentlichende Stelle', 'name' : '', 'url' : '', 'email' : '', 'address' : '' }
+        publisher = { 'role' : u'Veröntlichende Stelle', 'name' : '', 'url' : '', 'email' : '', 'address' : '' }
         owner = { 'role' : u'Ansprechpartner', 'name' : '', 'url' : '', 'email' : '', 'address' : '' }
 
         if gemini_values['publisher-email']:
@@ -718,9 +789,11 @@ class GeminiHarvester(SpatialHarvester):
 
         extras['spatial'] = extent_string.strip()
 
+        # Only [a-zA-Z0-9-_] is allowed, filter every other character
         tags = []
         for tag in gemini_values['tags']:
             tag = tag[:50] if len(tag) > 50 else tag
+            tag = re.sub('[^a-zA-Z0-9-_ ]*', '', tag)
             tags.append({'name':tag})
         
         #add groups (mapped from ISO 19115 into OGD schema)      
@@ -859,8 +932,18 @@ class GeminiHarvester(SpatialHarvester):
             if is_a_document:
                 package_dict['type'] = 'dokument'
             else:
-                package_dict['type'] = 'datensatz'
-                
+                if 'service' in gemini_values['resource-type'] or 'application' in gemini_values['resource-type'] :
+                    package_dict['type'] = 'app'
+                else:
+                    if 'document' in gemini_values['resource-type']:
+                        package_dict['type'] = 'dokument'            
+                    else:
+                        if 'dataset' in gemini_values['resource-type'] or 'nonGeographicDataset' in gemini_values['resource-type'] or 'database' in gemini_values['resource-type'] or  'series' in gemini_values['resource-type']:
+                            package_dict['type'] = 'datensatz'
+                        else:
+                            package_dict['type'] = 'dokument'
+                            
+                                 
             if package == None:
                 # Create new package from data.
                 package = self._create_package_from_data(package_dict)
@@ -1392,7 +1475,7 @@ class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
             self._save_object_error('Empty content for object %s' % harvest_object.id,harvest_object,'Import')
             return False
         try:
-            self.import_inspire_object(harvest_object.content)
+            self.import_inspire_object(harvest_object.content,harvest_object)
             return True
         except Exception, e:
             log.error('Exception during import: %s' % text_traceback())
