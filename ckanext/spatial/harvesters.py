@@ -23,6 +23,7 @@ from numbers import Number
 import sys
 import uuid
 import os
+import tempfile
 import logging
 
 from lxml import etree
@@ -55,6 +56,7 @@ from ckanext.spatial.validation import Validators, all_validators
 
 import ckanext.spatial.lib.license_map
 from urllib2 import HTTPError
+import tempfile
 
 
 log = logging.getLogger(__name__)
@@ -87,7 +89,7 @@ class SpatialHarvester(object):
             return isinstance(s.contents, dict) and s.contents != {}
         except Exception, e:
             log.error('WMS check for %s failed with exception: %s' % (url, str(e)))
-        return False
+            return False
 
     def _get_validator(self):
         '''
@@ -730,6 +732,9 @@ class GeminiHarvester(SpatialHarvester):
         for cat in  gemini_values['topic-category']:
             categories.append({'name':cat})
 
+        # TODO: the following line is only valid for portalU, pls keep that in mind
+        categories.append({'name':'umwelt_klima'})
+        
         package_dict = {
             'title': gemini_values['title'],
             'notes': gemini_values['abstract'],
@@ -782,7 +787,7 @@ class GeminiHarvester(SpatialHarvester):
                         {
                             'url': url,
                             'name': resource_locator.get('name',''),
-                            'description': resource_locator.get('description') if resource_locator.get('description') else 'Resource locator',
+                            'description': resource_locator.get('description') if resource_locator.get('description') else (resource_format + ' - Ressource'),
                             'format': resource_format or None,
                             'resource_locator_protocol': resource_locator.get('protocol',''),
                             'resource_locator_function':resource_locator.get('function','')
@@ -1305,7 +1310,7 @@ class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
         used_identifiers = []
         ids = []
         try:
-            for identifier in self.csw.getidentifiers(limit=100, page=10):
+            for identifier in self.csw.getidentifiers(limit=1000, page=10):
                 try:
                     log.info('Got identifier %s from the CSW', identifier)
                     if identifier in used_identifiers:
@@ -1371,6 +1376,110 @@ class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
 
     def import_stage(self, harvest_object):
         '''Import stage of the OGPD Harvester'''
+
+        log = logging.getLogger(__name__ + '.import')
+        #log.debug('Import stage for harvest object: %r', harvest_object)
+        log.debug('Import stage for harvest object')
+
+        if not harvest_object:
+            log.error('No harvest object received')
+            return False
+
+        # Save a reference
+        self.obj = harvest_object
+
+        if harvest_object.content is None:
+            self._save_object_error('Empty content for object %s' % harvest_object.id,harvest_object,'Import')
+            return False
+        try:
+            self.import_inspire_object(harvest_object.content)
+            return True
+        except Exception, e:
+            log.error('Exception during import: %s' % text_traceback())
+            if not str(e).strip():
+                self._save_object_error('Error importing INSPIRE document.', harvest_object, 'Import')
+            else:
+                self._save_object_error('Error importing INSPIRE document: %s' % str(e), harvest_object, 'Import')
+
+            if debug_exception_mode:
+                raise
+
+    def _setup_csw_client(self, url):
+        self.csw = CswService(url)
+
+class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
+    '''
+    A Harvester for CSW servers, for targeted at import into the German Open Data Platform now focused on Destatis
+    '''
+    implements(IHarvester)
+
+    def info(self):
+        return {
+            'name': 'destatis',
+            'title': 'Destatis Harvester',
+            'description': 'Harvester for CSW Servers, which return a zip file with xml files like Destatis'
+            }
+
+    def gather_stage(self,harvest_job):
+        log.debug('In DestatisHarvester gather_stage')
+        # Get source URL
+        url = harvest_job.source.url
+
+        tmpdir = tempfile.gettempdir()
+        
+        try:
+            req = urllib2.urlopen(url)
+            local_file=open(tmpdir+"/file.zip", "wb")
+            while 1:
+                packet = req.read()
+                if not packet:
+                    break
+                local_file.write(packet)
+            req.close()
+            local_file.close()
+        except Exception, e:
+            print "error"
+            return None
+        finally:
+            req.close()
+            
+        import zipfile 
+        zipfile.ZipFile(tmpdir+"/file.zip","r").extractall(tmpdir+"/temp")
+
+        ids = []
+        for xml_file in os.listdir(tmpdir+"/temp"):
+            obj = HarvestObject(guid = None, job = harvest_job)
+            obj.save()
+            ids.append(obj.id)
+            
+        if len(ids) == 0:
+            self._save_gather_error('No records received from the CSW server', harvest_job)
+            return None
+
+        return ids
+    
+    def fetch_stage(self,harvest_object):
+        
+        identifier = harvest_object.guid
+        tmpdir = tempfile.gettempdir()
+        for xml_file in os.listdir(tmpdir+"/temp"):
+            try:
+                f = open(tmpdir + "/temp/"+xml_file,"r")
+                harvest_object.content = f.read()
+                harvest_object.save()
+                if(len(harvest_object.content) == 0):
+                    self._save_object_error('Empty record for GUID %s' % identifier,harvest_object)
+                    return False
+                log.debug('XML content saved (len %s)', len(harvest_object.content))
+                return True
+            except Exception, e:
+                self._save_object_error('Error saving the harvest object for GUID %s [%r]' % (identifier,e),harvest_object)
+                return False
+            finally:
+                f.close()
+
+    def import_stage(self, harvest_object):
+        '''Import stage of the Destatis Harvester'''
 
         log = logging.getLogger(__name__ + '.import')
         #log.debug('Import stage for harvest object: %r', harvest_object)
