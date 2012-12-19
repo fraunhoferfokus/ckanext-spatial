@@ -610,6 +610,8 @@ class GeminiHarvester(SpatialHarvester):
                     result.append(resource)
         return result
 
+    def handle_licenses(self,gemini_values):
+        return ckanext.spatial.lib.license_map.translate_license_data(gemini_values)
 
     def write_package_from_inspire_string(self, content, harvest_object):
         '''Create or update a package based on fetched INSPIRE content'''
@@ -789,7 +791,8 @@ class GeminiHarvester(SpatialHarvester):
             extras['temporal_granularity_factor'] = temp_factor
 
         # map INSPIRE constraint fields to OGPD license fields
-        terms_of_use = ckanext.spatial.lib.license_map.translate_license_data(gemini_values)
+        # terms_of_use = ckanext.spatial.lib.license_map.translate_license_data(gemini_values)
+        terms_of_use = self.handle_licenses(gemini_values)
 
         # terms of use == null indicates to drop the entry completely
         if terms_of_use is None:
@@ -798,7 +801,7 @@ class GeminiHarvester(SpatialHarvester):
         extras['terms_of_use'] = terms_of_use
         
         # map INSPIRE responsible organisation fields to OGPD contacts
-        publisher = { 'role' : u'Veröntlichende Stelle', 'name' : '', 'url' : '', 'email' : '', 'address' : '' }
+        publisher = { 'role' : u'Veröffentlichende Stelle', 'name' : '', 'url' : '', 'email' : '', 'address' : '' }
         owner = { 'role' : u'Ansprechpartner', 'name' : '', 'url' : '', 'email' : '', 'address' : '' }
 
         if gemini_values['publisher-email']:
@@ -911,14 +914,14 @@ class GeminiHarvester(SpatialHarvester):
         services = self.handle_services(service_locators)
         package_dict['resources'].extend(services)
         
-            # Guess the best view service to use in WMS preview
-            verified_view_resources = [r for r in package_dict['resources'] if 'verified' in r and r['format'] == 'WMS']
-            if len(verified_view_resources):
-                verified_view_resources[0]['ckan_recommended_wms_preview'] = True
-            else:
-                view_resources = [r for r in package_dict['resources'] if r['format'] == 'WMS']
-                if len(view_resources):
-                    view_resources[0]['ckan_recommended_wms_preview'] = True
+        # Guess the best view service to use in WMS preview
+        verified_view_resources = [r for r in package_dict['resources'] if 'verified' in r and r['format'] == 'WMS']
+        if len(verified_view_resources):
+            verified_view_resources[0]['ckan_recommended_wms_preview'] = True
+        else:
+            view_resources = [r for r in package_dict['resources'] if r['format'] == 'WMS']
+            if len(view_resources):
+                view_resources[0]['ckan_recommended_wms_preview'] = True
 
         extras_as_dict = []
         for key,value in extras.iteritems():
@@ -996,13 +999,13 @@ class GeminiHarvester(SpatialHarvester):
         while '--' in name:
             name = name.replace('--', '-')
         like_q = u'%s%%' % name
-        pkg_query = Session.query(Package).filter(Package.name.ilike(like_q)).limit(100)
+        pkg_query = Session.query(Package).filter(Package.name.ilike(like_q)).limit(1000000)
         taken = [pkg.name for pkg in pkg_query]
         if name not in taken:
             return name
         else:
             counter = 1
-            while counter < 101:
+            while counter < 1000001:
                 if name+str(counter) not in taken:
                     return name+str(counter)
                 counter = counter + 1
@@ -1507,6 +1510,7 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
     '''
     implements(IHarvester)
 
+    temp_directory = '/temp_destatis_dir'
     def info(self):
         return {
             'name': 'destatis',
@@ -1521,9 +1525,16 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
 
         tmpdir = tempfile.gettempdir()
         
+        import shutil
+
+        # remove old dir from previous harvest run
+        if(os.path.exists(tmpdir+self.temp_directory)):
+            shutil.rmtree(tmpdir+self.temp_directory)
+        if(os.path.exists(tmpdir+'/file_destatis.zip')):
+            os.remove(tmpdir+'/file_destatis.zip')
         try:
             req = urllib2.urlopen(url)
-            local_file=open(tmpdir+"/file.zip", "wb")
+            local_file=open(tmpdir+"/file_destatis.zip", "wb")
             while 1:
                 packet = req.read()
                 if not packet:
@@ -1538,10 +1549,10 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
             req.close()
             
         import zipfile 
-        zipfile.ZipFile(tmpdir+"/file.zip","r").extractall(tmpdir+"/temp")
+        zipfile.ZipFile(tmpdir+"/file_destatis.zip","r").extractall(tmpdir+self.temp_directory)
 
         ids = []
-        for xml_file in os.listdir(tmpdir+"/temp"):
+        for xml_file in os.listdir(tmpdir+self.temp_directory):
             obj = HarvestObject(guid = None, job = harvest_job)
             obj.save()
             ids.append(obj.id)
@@ -1556,9 +1567,9 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
         
         identifier = harvest_object.guid
         tmpdir = tempfile.gettempdir()
-        for xml_file in os.listdir(tmpdir+"/temp"):
+        for xml_file in os.listdir(tmpdir+self.temp_directory):
             try:
-                f = open(tmpdir + "/temp/"+xml_file,"r")
+                f = open(tmpdir + self.temp_directory+'/'+xml_file,"r")
                 harvest_object.content = f.read()
                 harvest_object.save()
                 if(len(harvest_object.content) == 0):
@@ -1590,7 +1601,7 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
             self._save_object_error('Empty content for object %s' % harvest_object.id,harvest_object,'Import')
             return False
         try:
-            self.import_inspire_object(harvest_object.content)
+            self.import_inspire_object(harvest_object.content,harvest_object)
             return True
         except Exception, e:
             log.error('Exception during import: %s' % text_traceback())
@@ -1604,3 +1615,44 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
 
     def _setup_csw_client(self, url):
         self.csw = CswService(url)
+        
+    def handle_resources(self,resource_locators):
+        ''' Handle all resources except for WMS endpoints for Destatis '''
+        result = []
+        if len(resource_locators):
+            log.info("Found %s resources" %len(resource_locators))
+            for resource_locator in resource_locators:
+                print "Resource: ",
+                print resource_locator
+                url = resource_locator.get('url','')
+                if url:
+                    resource_format = ''
+                    resource = {}
+                    if self._is_pdf_URI(url):
+                        resource_format = 'PDF'
+                    elif self._is_wms(url):
+                        resource['verified'] = True
+                        resource['verified_date'] = datetime.now().isoformat()
+                        resource_format = 'WMS'
+                    elif 'tabelleErgebnis' in url:
+                        log.info("Found XLS resource")
+                        resource_format = 'XLS'
+                        url = url.replace('tabelleErgebnis','tabelleDownload') + '.xls'
+                        
+                    resource.update(
+                        {
+                            'url': url,
+                            'name': resource_format + ' - Ressource',
+                            'description': resource_format + ' - Ressource',
+                            'format': resource_format or None,
+                            'resource_locator_protocol': resource_locator.get('protocol',''),
+                            'resource_locator_function':resource_locator.get('function','')
+
+                        })
+                    result.append(resource)
+        return result
+
+    def handle_licenses(self, gemini_values):
+        # add cc-by to gemini other constraints
+        gemini_values['other-constraints'].append('CC-BY 3.0')
+        return ckanext.spatial.lib.license_map.translate_license_data(gemini_values)
