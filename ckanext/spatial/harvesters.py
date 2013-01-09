@@ -575,7 +575,8 @@ class GeminiHarvester(SpatialHarvester):
                             'resource_locator_function':resource_locator.get('function','')
 
                         })
-                    result.append(resource)
+                    if resource['format']:
+                        result.append(resource)
         return result
     
     def handle_services(self,service_locators):
@@ -601,13 +602,14 @@ class GeminiHarvester(SpatialHarvester):
                         {
                             'url': url,
                             'name': service_locator.get('name',''),
-                            'description': service_locator.get('description') if service_locator.get('description') else 'Ressource',
+                            'description': service_locator.get('description') if service_locator.get('description') else (service_format + ' - Ressource'),
                             'format': service_format or None,
                             'resource_locator_protocol': service_locator.get('protocol',''),
                             'resource_locator_function':service_locator.get('function','')
 
                         })
-                    result.append(resource)
+                    if resource['format']:
+                        result.append(resource)
         return result
 
     def handle_licenses(self,gemini_values):
@@ -801,8 +803,8 @@ class GeminiHarvester(SpatialHarvester):
         extras['terms_of_use'] = terms_of_use
         
         # map INSPIRE responsible organisation fields to OGPD contacts
-        publisher = { 'role' : u'Veröffentlichende Stelle', 'name' : '', 'url' : '', 'email' : '', 'address' : '' }
-        owner = { 'role' : u'Ansprechpartner', 'name' : '', 'url' : '', 'email' : '', 'address' : '' }
+        publisher = { 'role' : u'veroeffentlichende_stelle', 'name' : '', 'url' : '', 'email' : '', 'address' : '' }
+        owner = { 'role' : u'ansprechpartner', 'name' : '', 'url' : '', 'email' : '', 'address' : '' }
 
         if gemini_values['publisher-email']:
                 publisher['email'] = gemini_values['publisher-email']
@@ -829,7 +831,7 @@ class GeminiHarvester(SpatialHarvester):
                 parties[responsible_party['organisation-name']] = [responsible_party['role']]
 
         extras['contacts'] = [ owner, publisher ]
-        
+        #copy publisher and maintainer to ckan core fields
         parties_extra = []
         for party_name in parties:
             parties_extra.append('%s (%s)' % (party_name, ', '.join(parties[party_name])))
@@ -884,6 +886,22 @@ class GeminiHarvester(SpatialHarvester):
         
         #copy license_id to ckan-core license id
         package_dict['license_id'] = extras['terms_of_use']['license_id']
+        # copy maintainer and publisher to ckan-core fields
+        # TODO you can to this way better
+        author_dict = [x for x in extras['contacts'] if "veroeffentlichende_stelle" in x['role']][0]
+        print author_dict
+        if len(author_dict):
+            package_dict['author'] = author_dict['name']
+        else:
+            package_dict['author'] = ''
+        maintainer_dict  = [x for x in extras['contacts'] if 'ansprechpartner' in x['role']][0]
+        print maintainer_dict
+        if len(maintainer_dict):
+            package_dict['maintainer'] = maintainer_dict['name']
+        else:
+            package_dict['maintainer'] = ''
+        log.debug('Set author to %s' %package_dict['author'])        
+        log.debug('Set maintainer to %s' %package_dict['maintainer'])        
         log.debug('Set license_id to %s' %package_dict['license_id'])
         
         log.debug('Set groups to ' + str(package_dict['groups']))
@@ -914,6 +932,19 @@ class GeminiHarvester(SpatialHarvester):
         services = self.handle_services(service_locators)
         package_dict['resources'].extend(services)
         
+        print package_dict['resources']
+        print ">>>>>> Removing duplicate entries <<<<<"
+        # remove duplicate items according to their URL
+        seen = set()
+        cleaned_list = []
+        for d in sorted(package_dict['resources'], key=lambda k:k.get('verified'), reverse=True):
+            url = d['url']
+            if url not in seen:
+                seen.add(url)
+                cleaned_list.append(d)
+
+        package_dict['resources'] = cleaned_list
+        print package_dict['resources']
         # Guess the best view service to use in WMS preview
         verified_view_resources = [r for r in package_dict['resources'] if 'verified' in r and r['format'] == 'WMS']
         if len(verified_view_resources):
