@@ -1056,36 +1056,34 @@ class InspireDocument(MappedXmlDocument):
         
         return values
 
+
+
     def infer_date_released(self, values):
-        value = ''
+        value = []
         for date in values['dataset-reference-date']:
             if date['type'] == 'publication':
-                value = date['value']
-                break
+                value.append(date['value'])
         values['date-released'] = value
 
+
     def infer_date_updated(self, values):
-        value = ''
-        dates = []
+        value = []
         # Use last of several multiple revision dates.
         for date in values['dataset-reference-date']:
             if date['type'] == 'revision':
-                dates.append(date['value'])
-
-        if len(dates):
-            if len(dates) > 1:
-                dates.sort(reverse=True)
-            value = dates[0]
-
+                value.append(date['value'])
         values['date-updated'] = value
+        
+        
 
     def infer_date_created(self, values):
-        value = ''
+        value = []
         for date in values['dataset-reference-date']:
             if date['type'] == 'creation':
-                value = date['value']
-                break
+                value.append(date['value'])
         values['date-created'] = value
+
+
 
     def infer_url(self, values):
         value = ''
