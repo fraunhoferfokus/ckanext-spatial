@@ -140,7 +140,7 @@ class GeminiElement(MappedXmlElement):
 
     namespaces = {
        "gts": "http://www.isotc211.org/2005/gts",
-       "gml": "http://www.opengis.net/gml/3.2",
+       "gml": "http://www.opengis.net/gml",
        "gmx": "http://www.isotc211.org/2005/gmx",
        "gsr": "http://www.isotc211.org/2005/gsr",
        "gss": "http://www.isotc211.org/2005/gss",

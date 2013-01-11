@@ -740,15 +740,14 @@ class GeminiHarvester(SpatialHarvester):
         extras['subgroups'] = gemini_values['topic-category']
         log.debug('Set subgroups: ' + str(gemini_values['topic-category']))
 
-        if gemini_values.has_key('temporal-extent-begin'):
-            #gemini_values['temporal-extent-begin'].sort()
-            extras['temporal_coverage-from'] = gemini_values['temporal-extent-begin']
-        if gemini_values.has_key('temporal-extent-end'):
-            #gemini_values['temporal-extent-end'].sort()
-            extras['temporal_coverage-to'] = gemini_values['temporal-extent-end']
+         
+        if len(gemini_values['temporal-extent-begin']) > 0:
+            extras['temporal_coverage-from'] = self.convert_to_datetime(gemini_values['temporal-extent-begin'][0])
+        if len(gemini_values['temporal-extent-end']) > 0:
+            extras['temporal_coverage-to'] = self.convert_to_datetime(gemini_values['temporal-extent-end'][0])
+         
             
-            
-                #temporal granularity information
+        #temporal granularity information
         duration_translator = DurationTranslator()      
         temp_duration = ''
         temp_factor = ''
