@@ -774,11 +774,11 @@ class GeminiHarvester(SpatialHarvester):
                     temp_factor =  duration['duration_factor']                
         else:
             if gemini_values['frequency-of-update'] == 'forthnightly':
-                    temp_duration = 'Tag'
+                    temp_duration = 'tag'
                     temp_factor = 14   
             else:
                 if gemini_values['frequency-of-update'] == 'biannually':
-                    temp_duration = 'Monat'
+                    temp_duration = 'monat'
                     temp_factor = 6            
                 else:
                     if duration:       
@@ -801,8 +801,8 @@ class GeminiHarvester(SpatialHarvester):
         extras['terms_of_use'] = terms_of_use
         
         # map INSPIRE responsible organisation fields to OGPD contacts
-        publisher = { 'role' : u'Veröffentlichende Stelle', 'name' : '', 'url' : '', 'email' : '', 'address' : '' }
-        owner = { 'role' : u'Ansprechpartner', 'name' : '', 'url' : '', 'email' : '', 'address' : '' }
+        publisher = { 'role' : u'veroeffentlichende_stelle', 'name' : '', 'url' : '', 'email' : '', 'address' : '' }
+        owner = { 'role' : u'ansprechpartner', 'name' : '', 'url' : '', 'email' : '', 'address' : '' }
 
         if gemini_values['publisher-email']:
                 publisher['email'] = gemini_values['publisher-email']
