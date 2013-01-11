@@ -881,13 +881,11 @@ class GeminiHarvester(SpatialHarvester):
         # copy maintainer and publisher to ckan-core fields
         # TODO you can to this way better
         author_dict = [x for x in extras['contacts'] if "veroeffentlichende_stelle" in x['role']][0]
-        print author_dict
         if len(author_dict):
             package_dict['author'] = author_dict['name']
         else:
             package_dict['author'] = ''
         maintainer_dict  = [x for x in extras['contacts'] if 'ansprechpartner' in x['role']][0]
-        print maintainer_dict
         if len(maintainer_dict):
             package_dict['maintainer'] = maintainer_dict['name']
         else:
@@ -924,8 +922,6 @@ class GeminiHarvester(SpatialHarvester):
         services = self.handle_services(service_locators)
         package_dict['resources'].extend(services)
         
-        print package_dict['resources']
-        print ">>>>>> Removing duplicate entries <<<<<"
         # remove duplicate items according to their URL
         seen = set()
         cleaned_list = []
@@ -936,7 +932,6 @@ class GeminiHarvester(SpatialHarvester):
                 cleaned_list.append(d)
 
         package_dict['resources'] = cleaned_list
-        print package_dict['resources']
         # Guess the best view service to use in WMS preview
         verified_view_resources = [r for r in package_dict['resources'] if 'verified' in r and r['format'] == 'WMS']
         if len(verified_view_resources):
@@ -1678,8 +1673,6 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
         if len(resource_locators):
             log.info("Found %s resources" %len(resource_locators))
             for resource_locator in resource_locators:
-                print "Resource: ",
-                print resource_locator
                 url = resource_locator.get('url','')
                 if url:
                     resource_format = ''
