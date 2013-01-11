@@ -733,7 +733,7 @@ class GeminiHarvester(SpatialHarvester):
         extras['metadata_original_portal'] = url_schema.netloc
         extras['metadata_original_id'] = gemini_values['guid']
         
-        csw_request = '?Service=CSW&Request=GetRecordById&Id='
+        csw_request = '?Service=CSW&ElementSetName=full&Request=GetRecordById&Id='
         extras['metadata_original_xml'] = harvest_object.source.url + csw_request + gemini_values['guid']  
      
  
