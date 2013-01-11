@@ -703,7 +703,6 @@ class GeminiHarvester(SpatialHarvester):
             'spatial-reference-system',
             'guid',
             # Usefuls
-            'dataset-reference-date',
             'resource-type',
             'metadata-language', # Language
             'metadata-date', # Released
@@ -715,49 +714,42 @@ class GeminiHarvester(SpatialHarvester):
             extras[name] = gemini_values[name]
        
         #map given dates to OGPD date fields
-        ogpd_date_created = { 'role' : u'erstellt',  'date' : ''}
-        ogpd_date_released = { 'role' : u'veroeffentlicht', 'date' : ''}
-        dates = []
+        dates = []    
         
-        if gemini_values['date-released']:
-            ogpd_date_released['date'] = gemini_values['date-released']    
-        else:
-            ogpd_date_released['date'] = gemini_values['metadata-date']  
+        release_dates_combined = []
+        release_dates_combined.append(gemini_values['metadata-date'])
+        release_dates_combined = release_dates_combined + gemini_values['date-released']
         
-        dates.append(ogpd_date_released)     
-                           
-        if gemini_values['date-updated']:
-            for date in gemini_values['date-updated'] :
-                ogpd_date_updated = { 'role' : u'aktualisiert', 'date' : date}
-                dates.append(ogpd_date_updated)     
+        release_dates = self.get_dates(release_dates_combined, u'veroeffentlicht')
+        creation_dates = self.get_dates(gemini_values['date-created'], u'erstellt')
+        update_dates = self.get_dates(gemini_values['date-updated'], u'aktualisiert')
         
-        if gemini_values['date-created']:
-            ogpd_date_created['date'] = (gemini_values['date-created']) [0]
-            dates.append(ogpd_date_created)
+        dates = release_dates + creation_dates + update_dates
              
-        extras['dates']= dates
+        extras['dates'] = dates 
+        
+        
         
         #original metadata information  
         url_schema = urlparse(harvest_object.source.url)
         extras['metadata_original_portal'] = url_schema.netloc
         extras['metadata_original_id'] = gemini_values['guid']
         
-        csw_request = '?Service=CSW&Request=GetRecordById&Id='
+        csw_request = '?Service=CSW&ElementSetName=full&Request=GetRecordById&Id='
         extras['metadata_original_xml'] = harvest_object.source.url + csw_request + gemini_values['guid']  
      
  
         extras['subgroups'] = gemini_values['topic-category']
         log.debug('Set subgroups: ' + str(gemini_values['topic-category']))
 
-        if gemini_values.has_key('temporal-extent-begin'):
-            #gemini_values['temporal-extent-begin'].sort()
-            extras['temporal_coverage-from'] = gemini_values['temporal-extent-begin']
-        if gemini_values.has_key('temporal-extent-end'):
-            #gemini_values['temporal-extent-end'].sort()
-            extras['temporal_coverage-to'] = gemini_values['temporal-extent-end']
+         
+        if len(gemini_values['temporal-extent-begin']) > 0:
+            extras['temporal_coverage-from'] = self.convert_to_datetime(gemini_values['temporal-extent-begin'][0])
+        if len(gemini_values['temporal-extent-end']) > 0:
+            extras['temporal_coverage-to'] = self.convert_to_datetime(gemini_values['temporal-extent-end'][0])
+         
             
-            
-                #temporal granularity information
+        #temporal granularity information
         duration_translator = DurationTranslator()      
         temp_duration = ''
         temp_factor = ''
@@ -776,11 +768,11 @@ class GeminiHarvester(SpatialHarvester):
                     temp_factor =  duration['duration_factor']                
         else:
             if gemini_values['frequency-of-update'] == 'forthnightly':
-                    temp_duration = 'Tag'
+                    temp_duration = 'tag'
                     temp_factor = 14   
             else:
                 if gemini_values['frequency-of-update'] == 'biannually':
-                    temp_duration = 'Monat'
+                    temp_duration = 'monat'
                     temp_factor = 6            
                 else:
                     if duration:       
@@ -1024,6 +1016,39 @@ class GeminiHarvester(SpatialHarvester):
             assert self.obj.id == [e['value'] for e in package['extras'] if e['key'] == 'harvest_object_id'][0]
     
             return package
+    
+    
+    
+    def get_dates(self, dates, role):
+        
+        result = []   
+         
+        if len(dates) > 0:
+            for date in dates :
+                if isinstance(date, basestring):
+                    ogpd_date_released = { 'role' : role, 'date' : self.convert_to_datetime(date)}
+                    result.append(ogpd_date_released)
+                else:    
+                    ogpd_date_released = { 'role' : role, 'date' : self.convert_to_datetime(date[0])}
+                    result.append(ogpd_date_released)    
+        return result
+
+      
+      
+             
+    def convert_to_datetime(self, dt):
+        
+        import datetime         
+        try:
+            # the given format is already datetime
+            t = datetime.datetime.strptime(dt, "%Y-%m-%dT%H:%M:%S")
+            return t.isoformat()
+        except:
+            # convert date to datetime by adding midnight-time to the date
+            d = datetime.datetime.strptime(dt, "%Y-%m-%d")       
+            midnight = datetime.time(0)
+            return (datetime.datetime.combine(d.date(), midnight)).isoformat()
+     
         
     def gen_new_name(self, title):
         name = munge_title_to_name(title).replace('_', '-')
