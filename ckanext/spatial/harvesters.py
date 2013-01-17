@@ -347,10 +347,10 @@ class GeminiHarvester(SpatialHarvester):
         extras['access_constraints'] = gemini_values.get('limitations-on-public-access','')
         if gemini_values.has_key('temporal-extent-begin'):
             #gemini_values['temporal-extent-begin'].sort()
-            extras['temporal_coverage-from'] = gemini_values['temporal-extent-begin']
+            extras['temporal_coverage_from'] = gemini_values['temporal-extent-begin']
         if gemini_values.has_key('temporal-extent-end'):
             #gemini_values['temporal-extent-end'].sort()
-            extras['temporal_coverage-to'] = gemini_values['temporal-extent-end']
+            extras['temporal_coverage_to'] = gemini_values['temporal-extent-end']
 
 
 
@@ -744,9 +744,9 @@ class GeminiHarvester(SpatialHarvester):
 
          
         if len(gemini_values['temporal-extent-begin']) > 0:
-            extras['temporal_coverage-from'] = self.convert_to_datetime(gemini_values['temporal-extent-begin'][0])
+            extras['temporal_coverage_from'] = self.convert_to_datetime(gemini_values['temporal-extent-begin'][0])
         if len(gemini_values['temporal-extent-end']) > 0:
-            extras['temporal_coverage-to'] = self.convert_to_datetime(gemini_values['temporal-extent-end'][0])
+            extras['temporal_coverage_to'] = self.convert_to_datetime(gemini_values['temporal-extent-end'][0])
          
             
         #temporal granularity information
