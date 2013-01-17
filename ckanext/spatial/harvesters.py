@@ -518,7 +518,7 @@ class GeminiHarvester(SpatialHarvester):
         if url.endswith(".pdf"):
             return True
         else:
-            req = urllib2.urlopen(url)
+            req = urllib2.urlopen(url,timeout=10)
             headers = req.headers['content-type']
             #TODO application/octet-stream isbinary, accept as pdf?
             return 'application/pdf' in headers
@@ -529,7 +529,7 @@ class GeminiHarvester(SpatialHarvester):
             return True
         else:
             log.info('try to open url: %s' %url)
-            req = urllib2.urlopen(url)
+            req = urllib2.urlopen(url,timeout=10)
             headers = req.headers['content-type']
             if 'text/html' in headers:
                 log.info("%s is html page" %url)
@@ -539,7 +539,7 @@ class GeminiHarvester(SpatialHarvester):
     def _is_probably_wms(self, url):
         log.info('try to open url: %s' %url)
         try:
-            urllib2.urlopen(url)
+            urllib2.urlopen(url,timeout=10)
         except HTTPError :
             return False
         else:
@@ -964,16 +964,16 @@ class GeminiHarvester(SpatialHarvester):
             if is_a_document:
                 package_dict['type'] = 'dokument'
             else:
-                if 'service' in gemini_values['resource-type'] or 'application' in gemini_values['resource-type'] :
-                    package_dict['type'] = 'app'
+                #if 'service' in gemini_values['resource-type'] or 'application' in gemini_values['resource-type'] :
+                #    package_dict['type'] = 'app'
+                #else:
+                if 'document' in gemini_values['resource-type']:
+                    package_dict['type'] = 'dokument'            
                 else:
-                    if 'document' in gemini_values['resource-type']:
-                        package_dict['type'] = 'dokument'            
+                    if 'dataset' in gemini_values['resource-type'] or 'nonGeographicDataset' in gemini_values['resource-type'] or 'database' in gemini_values['resource-type'] or  'series' in gemini_values['resource-type']:
+                        package_dict['type'] = 'datensatz'
                     else:
-                        if 'dataset' in gemini_values['resource-type'] or 'nonGeographicDataset' in gemini_values['resource-type'] or 'database' in gemini_values['resource-type'] or  'series' in gemini_values['resource-type']:
-                            package_dict['type'] = 'datensatz'
-                        else:
-                            package_dict['type'] = 'dokument'
+                        package_dict['type'] = 'dokument'
                             
                                  
             if package == None:
@@ -1458,7 +1458,7 @@ class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
         used_identifiers = []
         ids = []
         try:
-            for identifier in self.csw.getidentifiers(limit=1000, page=10):
+            for identifier in self.csw.getidentifiers(limit=3000,page=10):
                 try:
                     log.info('Got identifier %s from the CSW', identifier)
                     if identifier in used_identifiers:
@@ -1584,7 +1584,7 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
         if(os.path.exists(tmpdir+'/file_destatis.zip')):
             os.remove(tmpdir+'/file_destatis.zip')
         try:
-            req = urllib2.urlopen(url)
+            req = urllib2.urlopen(url,timeout=10)
             local_file=open(tmpdir+"/file_destatis.zip", "wb")
             while 1:
                 packet = req.read()
