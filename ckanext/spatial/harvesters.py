@@ -26,25 +26,23 @@ import uuid
 import os
 import tempfile
 import logging
+import difflib
 
 from lxml import etree
 from pylons import config
-from sqlalchemy.sql import update,and_, bindparam
+from sqlalchemy.sql import update, bindparam
 from sqlalchemy.exc import InvalidRequestError
-from owslib.csw import namespaces
 from owslib import wms
 
 from ckan import model
-from ckan.model import Session, repo, \
-                        Package, Resource, PackageExtra, \
-                        setup_default_user_roles
+from ckan.model import Session, Package
 from ckan.lib.munge import munge_title_to_name
 from ckan.plugins.core import SingletonPlugin, implements
 from ckan.lib.helpers import json
 
 from ckan import logic
 from ckan.logic import get_action, ValidationError
-from ckan.lib.navl.validators import not_empty, ignore_missing
+from ckan.lib.navl.validators import not_empty
 
 from ckanext.harvest.interfaces import IHarvester
 from ckanext.harvest.model import HarvestObject, HarvestGatherError, \
@@ -303,7 +301,11 @@ class GeminiHarvester(SpatialHarvester):
             else:
                 if last_harvested_object.content != self.obj.content and \
                  last_harvested_object.metadata_modified_date == self.obj.metadata_modified_date:
-                    raise Exception('The contents of document with GUID %s changed, but the metadata date has not been updated' % gemini_guid)
+                    diff_generator = difflib.HtmlDiff().make_table(
+                        last_harvested_object.content.split('\n'),
+                        self.obj.content.split('\n'))
+                    diff = '\n'.join([line for line in diff_generator])
+                    raise Exception('The contents of document with GUID %s changed, but the metadata date has not been updated.\nDiff:\n%s' % (gemini_guid, diff))
                 else:
                     # The content hasn't changed, no need to update the package
                     log.info('Document with GUID %s unchanged, skipping...' % (gemini_guid))
@@ -312,7 +314,6 @@ class GeminiHarvester(SpatialHarvester):
             log.info('No package with GEMINI guid %s found, let''s create one' % gemini_guid)
 
         extras = {
-            'published_by': self.obj.source.publisher_id or '',
             'UKLP': 'True',
             'harvest_object_id': self.obj.id
         }
@@ -338,11 +339,16 @@ class GeminiHarvester(SpatialHarvester):
         ]:
             extras[name] = gemini_values[name]
 
+        # Use-constraints can contain values which are:
+        #  * free text
+        #  * licence URL
+        # Store all values in extra['licence'] and if there is a
+        # URL in there, store that in extra['licence-url']
         extras['licence'] = gemini_values.get('use-constraints', '')
         if len(extras['licence']):
-            license_url_extracted = self._extract_first_license_url(extras['licence'])
-            if license_url_extracted:
-                extras['licence_url'] = license_url_extracted
+            licence_url_extracted = self._extract_first_licence_url(extras['licence'])
+            if licence_url_extracted:
+                extras['licence_url'] = licence_url_extracted
 
         extras['access_constraints'] = gemini_values.get('limitations-on-public-access','')
         if gemini_values.has_key('temporal-extent-begin'):
@@ -1098,7 +1104,9 @@ class GeminiHarvester(SpatialHarvester):
                 counter = counter + 1
             return None
 
-    def _extract_first_license_url(self,licences):
+    def _extract_first_licence_url(self, licences):
+        '''Given a list of pieces of licence info, hunt for the first one
+        which looks like a URL and return it. Otherwise returns None.'''
         for licence in licences:
             o = urlparse(licence)
             if o.scheme and o.netloc:
@@ -1243,6 +1251,7 @@ class GeminiCswHarvester(GeminiHarvester, SingletonPlugin):
                     continue
 
         except Exception, e:
+            log.error('Exception: %s' % text_traceback())
             self._save_gather_error('Error gathering the identifiers from the CSW server [%s]' % str(e), harvest_job)
             return None
 
@@ -1423,7 +1432,7 @@ class GeminiWafHarvester(GeminiHarvester, SingletonPlugin):
         if len(ids) > 0:
             return ids
         else:
-            self._save_gather_error('Couldn''t find any links to metadata files',
+            self._save_gather_error('Couldn\'t find any links to metadata files',
                                      harvest_job)
             return None
 
@@ -1449,19 +1458,25 @@ class GeminiWafHarvester(GeminiHarvester, SingletonPlugin):
             if not url:
                 continue
             if '?' in url:
+                log.debug('Ignoring link in WAF because it has "?": %s', url)
                 continue
             if '/' in url:
+                log.debug('Ignoring link in WAF because it has "/": %s', url)
                 continue
             if '#' in url:
+                log.debug('Ignoring link in WAF because it has "#": %s', url)
                 continue
             if 'mailto:' in url:
+                log.debug('Ignoring link in WAF because it has "mailto:": %s', url)
                 continue
+            log.debug('WAF contains file: %s', url)
             urls.append(url)
         base_url = base_url.rstrip('/').split('/')
         if 'index' in base_url[-1]:
             base_url.pop()
         base_url = '/'.join(base_url)
         base_url += '/'
+        log.debug('WAF base URL: %s', base_url)
         return [base_url + i for i in urls]
 
 class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):

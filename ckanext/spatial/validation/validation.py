@@ -67,7 +67,7 @@ class ISO19139Schema(XsdValidator):
 
 class ISO19139EdenSchema(XsdValidator):
     name = 'iso19139eden'
-    title = 'ISO19139 XSD Schema (EDEN)'
+    title = 'ISO19139 XSD Schema (EDEN 2009-03-16)'
 
     @classmethod
     def is_valid(cls, xml):
@@ -222,12 +222,22 @@ class SchematronValidator(BaseValidator):
 
 class ConstraintsSchematron(SchematronValidator):
     name = 'constraints'
-    title = 'ISO19139 Table A.1 Constraints Schematron 1.3'
+    title = 'ISO19139 Table A.1 Constraints Schematron (Medin 1.3)'
 
     @classmethod
     def get_schematrons(cls):
         with resource_stream("ckanext.spatial",
                              "validation/xml/medin/ISOTS19139A1Constraints_v1.3.sch") as schema:
+            return [cls.schematron(schema)]
+
+class ConstraintsSchematron14(SchematronValidator):
+    name = 'constraints-1.4'
+    title = 'ISO19139 Table A.1 Constraints Schematron (Medin/Parslow 1.4)'
+
+    @classmethod
+    def get_schematrons(cls):
+        with resource_stream("ckanext.spatial",
+                             "validation/xml/medin/ISOTS19139A1Constraints_v1.4.sch") as schema:
             return [cls.schematron(schema)]
 
 
@@ -246,6 +256,7 @@ all_validators = (ISO19139Schema,
                   ISO19139NGDCSchema,
                   FGDCSchema,
                   ConstraintsSchematron,
+                  ConstraintsSchematron14,
                   Gemini2Schematron)
 
 
