@@ -614,7 +614,13 @@ class GeminiHarvester(SpatialHarvester):
 
     def handle_licenses(self,gemini_values):
         return ckanext.spatial.lib.license_map.translate_license_data(gemini_values)
-
+    
+    def copy_author_to_maintainer(self, package_dict):
+        pass
+    
+    def copy_metadata_original_id_to_URL(self, package_dict):
+        pass
+    
     def write_package_from_inspire_string(self, content, harvest_object):
         '''Create or update a package based on fetched INSPIRE content'''
 
@@ -631,7 +637,16 @@ class GeminiHarvester(SpatialHarvester):
             try:
                 metadata_modified_date = datetime.strptime(gemini_values['metadata-date'],'%Y-%m-%dT%H:%M:%S')
             except:
-                raise Exception('Could not extract reference date for GUID %s (%s)' \
+                try:
+                    if 'Z' in gemini_values['metadata-date'] or '+' in gemini_values['metadata-date']:
+                        value = gemini_values['metadata-date'].find('Z')
+                        if value != -1:
+                            metadata_modified_date = datetime.strptime(gemini_values['metadata-date'][:-1],'%Y-%m-%dT%H:%M:%S')
+                        value = gemini_values['metadata-date'].find('+')
+                        if value != -1:
+                            metadata_modified_date = datetime.strptime(gemini_values['metadata-date'][:-((len(gemini_values['metadata-date'])-value))],'%Y-%m-%dT%H:%M:%S')
+                except:
+                    raise Exception('Could not extract reference date for GUID %s (%s)' \
                         % (gemini_guid,gemini_values['metadata-date']))
 
         self.obj.metadata_modified_date = metadata_modified_date
@@ -890,6 +905,8 @@ class GeminiHarvester(SpatialHarvester):
             package_dict['maintainer'] = maintainer_dict['name']
         else:
             package_dict['maintainer'] = ''
+            
+        self.copy_author_to_maintainer(package_dict)
         log.debug('Set author to %s' %package_dict['author'])        
         log.debug('Set maintainer to %s' %package_dict['maintainer'])        
         log.debug('Set license_id to %s' %package_dict['license_id'])
@@ -975,7 +992,8 @@ class GeminiHarvester(SpatialHarvester):
                     else:
                         package_dict['type'] = 'dokument'
                             
-                                 
+            
+            self.copy_metadata_original_id_to_URL(package_dict)                     
             if package == None:
                 # Create new package from data.
                 package = self._create_package_from_data(package_dict)
@@ -1039,10 +1057,28 @@ class GeminiHarvester(SpatialHarvester):
             t = datetime.datetime.strptime(dt, "%Y-%m-%dT%H:%M:%S")
             return t.isoformat()
         except:
-            # convert date to datetime by adding midnight-time to the date
-            d = datetime.datetime.strptime(dt, "%Y-%m-%d")       
-            midnight = datetime.time(0)
-            return (datetime.datetime.combine(d.date(), midnight)).isoformat()
+            try:
+                # convert date to datetime by adding midnight-time to the date
+                d = datetime.datetime.strptime(dt, "%Y-%m-%d")       
+                midnight = datetime.time(0)
+                return (datetime.datetime.combine(d.date(), midnight)).isoformat()
+            except:
+                try:
+                    if 'Z' in dt or '+' in dt:
+                        value = dt.find('Z')
+                        if value != -1:
+                            try:
+                                return (datetime.datetime.strptime(dt[:-1],'%Y-%m-%dT%H:%M:%S')).isoformat()
+                            except:
+                                return (datetime.datetime.strptime(dt[:-1],'%Y-%m-%d')).isoformat()
+                        value = dt.find('+')
+                        if value != -1:
+                            try:
+                                return (datetime.datetime.strptime(dt[:-((len(dt)-value))],'%Y-%m-%dT%H:%M:%S')).isoformat()
+                            except:
+                                return (datetime.datetime.strptime(dt[:-((len(dt)-value))],'%Y-%m-%d')).isoformat()
+                except:
+                    raise Exception('Could not extract date: %s' %dt)
      
         
     def gen_new_name(self, title):
@@ -1458,7 +1494,7 @@ class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
         used_identifiers = []
         ids = []
         try:
-            for identifier in self.csw.getidentifiers(limit=3000,page=10):
+            for identifier in self.csw.getidentifiers(limit=300,page=10):
                 try:
                     log.info('Got identifier %s from the CSW', identifier)
                     if identifier in used_identifiers:
@@ -1584,7 +1620,7 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
         if(os.path.exists(tmpdir+'/file_destatis.zip')):
             os.remove(tmpdir+'/file_destatis.zip')
         try:
-            req = urllib2.urlopen(url,timeout=10)
+            req = urllib2.urlopen(url)
             local_file=open(tmpdir+"/file_destatis.zip", "wb")
             while 1:
                 packet = req.read()
@@ -1686,8 +1722,10 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
                     elif 'tabelleErgebnis' in url:
                         log.info("Found XLS resource")
                         resource_format = 'XLS'
-                        url = url.replace('tabelleErgebnis','tabelleDownload') + '.xls'
-                        
+                        if url.endswith('.csv') or url.endswith('.xls'):
+                            url = url.replace('tabelleErgebnis','tabelleDownload')[:-4] + '.xls'
+                        elif url.endswith('.html'):
+                            url = url.replace('tabelleErgebnis','tabelleDownload')[:-5] + '.xls'
                     resource.update(
                         {
                             'url': url,
@@ -1705,3 +1743,20 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
         # add cc-by to gemini other constraints
         gemini_values['other-constraints'].append('CC-BY 3.0')
         return ckanext.spatial.lib.license_map.translate_license_data(gemini_values)
+    
+    '''
+    This method copies the author to maintainer. Thoses changes are made 
+    to package_dict directly. This is only valid for destatis
+    '''
+    def copy_author_to_maintainer(self,package_dict):
+        if not package_dict['maintainer']:
+            package_dict['maintainer'] = package_dict['author']
+    
+    '''
+    This method copies the metadata_original_id to url. Thoses changes are made 
+    to package_dict directly. This is only valid for destatis
+    '''        
+    def copy_metadata_original_id_to_URL(self, package_dict):
+        for x in package_dict['extras']:
+            if x['key'] == 'metadata_original_id':
+                package_dict['url'] = x['value']
