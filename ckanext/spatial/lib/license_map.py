@@ -47,13 +47,15 @@ def translate_license_data(gemini):
                                    'free'                : 'cc-zero',
                                    'keine'               : 'cc-zero',
                                    'no conditions apply' : 'cc-zero',
-				   'CC BY-SA'            : 'cc-by-sa'
+				   'CC BY-SA'            : 'cc-by-sa',
+				   'Datenlizenz Deutschland' : 'dl-de-by-1.0'
 				 }
 
         # Dictionary to map license IDs to their URLs
         urls = { 'cc-by'   : 'http://creativecommons.org/license/by/3.0/de',
                  'cc-zero' : 'http://creativecommons.org/publicdomain/zero/1.0/deed.de',
-		         'cc-by-sa': 'http://creativecommons.org/licenses/by-sa/3.0/de'
+		 'cc-by-sa': 'http://creativecommons.org/licenses/by-sa/3.0/de',
+		'dl-de-by-1.0' : 'http://www.daten-deutschland.de/bibliothek/Datenlizenz_Deutschland/dl-de-by-1.0'
                }
 
         # Sum up the use limitations and use constraints in the 'other'
@@ -91,12 +93,14 @@ def translate_license_data(gemini):
                         else:
                                 if constraint != 'otherRestrictions':
                                     other += constraint
+
                         
 
         # Append the other constraints information
         if len(gemini['other-constraints']) > 0:
                 for constraint in gemini['other-constraints']:
-                        other += constraint + ' '
+			if constraint != 'no conditions apply':
+                        	other += constraint + ' '
 
         if len(other) > 0:
                 other = other[:-1]

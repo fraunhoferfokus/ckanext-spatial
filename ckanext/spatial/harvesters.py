@@ -715,58 +715,67 @@ class GeminiHarvester(SpatialHarvester):
         
         
         # map INSPIRE responsible organisation fields to OGPD contacts
-        roles = ['publisher', 'owner', 'author', 'distributer', 'custodian', 'pointOfContact']
-        contacts = []
-        
-        for role in roles:
-            contact = {}
-            if gemini_values.has_key(role + '-email') and gemini_values[role + '-email']: 
-                contact['email'] = gemini_values[role + '-email']
-              
-            if gemini_values.has_key(role + '-url') and gemini_values[role + '-url']: 
-                contact['url'] = gemini_values[role + '-url']
-        
-            if gemini_values.has_key(role + '-individual-name'):  
-                if gemini_values[role + '-individual-name']:
-                    contact['name'] = gemini_values[role + '-individual-name']
-                else:
-                    if gemini_values.has_key(role + '-organisation-name'):
-                        contact['name'] = gemini_values[role + '-organisation-name']
-                        
-            if gemini_values.has_key(role + '-address') and gemini_values[role + '-address']:
-                contact['address'] = gemini_values[role + '-address']
-            
+
+	roles = ['publisher', 'owner', 'author', 'distributer', 'custodian', 'pointOfContact']
+	contacts = []
+
+	for role in roles:
+		contact = {}
+		if gemini_values.has_key(role + '-email') and gemini_values[role + '-email']: 
+		    contact['email'] = gemini_values[role + '-email']
+		  
+		if gemini_values.has_key(role + '-url') and gemini_values[role + '-url']: 
+		    contact['url'] = gemini_values[role + '-url']
+
+		if gemini_values.has_key(role + '-individual-name'):  
+		    if gemini_values[role + '-individual-name']:
+			contact['name'] = gemini_values[role + '-individual-name']
+		    else:
+			if gemini_values.has_key(role + '-organisation-name'):
+			    contact['name'] = gemini_values[role + '-organisation-name']
+			    
+		if gemini_values.has_key(role + '-address') and gemini_values[role + '-address']:
+		    contact['address'] = gemini_values[role + '-address']
 
 
-            if len(contact) != 0:
-                if role == 'custodian': 
-                    contact['role'] = 'ansprechpartner'                     
-                if role == 'pointOfContact':
-                    if gemini_values['pointOfContact-individual-name']:
-                        contact['role'] = 'ansprechpartner'
-                    else:
-                        contact['role'] = ' veroeffentlichende_stelle'
-                        contact['name'] = gemini_values['pointOfContact-organisation-name']              
-                else:                 
-                    if role == 'owner' or role == 'author':
-                        contact['role'] = 'autor'              
-                    else:                     
-                        if role == 'publisher':
-                            contact['role'] = 'veroeffentlichende_stelle'
-                            if gemini_values['pointOfContact-organisation-name']:
-                                contact['name'] = gemini_values['pointOfContact-organisation-name']
-                        else:                        
-                            if role == 'distributer' or role == 'resourceProvider':
-                                contact['role'] = 'vertrieb'  
-                 
-                if contact not in contacts:
-                    contacts.append(contact)
-            
-        extras['contacts'] = contacts   
 
-       
+		if len(contact) != 0:
+		    if role == 'custodian': 
+			contact['role'] = 'ansprechpartner'                     
+		    if role == 'pointOfContact':
+			if gemini_values['pointOfContact-individual-name']:
+			    contact['role'] = 'ansprechpartner'
+			else:
+			    contact['role'] = ' veroeffentlichende_stelle'
+			    contact['name'] = gemini_values['pointOfContact-organisation-name']              
+		    else:                 
+			if role == 'owner' or role == 'author':
+			    contact['role'] = 'autor'              
+			else:                     
+			    if role == 'publisher':
+				contact['role'] = 'veroeffentlichende_stelle'
+				if gemini_values['pointOfContact-organisation-name']:
+				    contact['name'] = gemini_values['pointOfContact-organisation-name']
+			    else:                        
+				if role == 'distributer' or role == 'resourceProvider':
+				    contact['role'] = 'vertrieb'  
+				    
+		    #print contact['role']
+		    if len(contacts) > 0:
+			contains_role = False
+			for c in contacts:
+			    if c['role'] == contact['role']: 
+				        contains_role = True
+				        break
+			if not contains_role:
+			    contacts.append(contact)
+		    else:
+			contacts.append(contact)
+
+       	extras['contacts'] = contacts
 
         # Construct a GeoJSON extent so ckanext-spatial can register the extent geometry
+  	
         extent_string = self.extent_template.substitute(
                 minx = gemini_values['bbox-east-long'],
                 miny = gemini_values['bbox-south-lat'],
@@ -776,6 +785,9 @@ class GeminiHarvester(SpatialHarvester):
 
         extras['spatial'] = extent_string.strip()
         
+	
+
+
         if gemini_values.has_key('spatial-text'): 
             extras['spatial-text'] = gemini_values['spatial-text']
 
