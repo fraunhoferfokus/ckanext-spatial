@@ -226,6 +226,13 @@ class GeminiResponsibleParty(GeminiElement):
                     ],
                     multiplicity="0..1",
                 ),
+                GeminiElement(
+                    name="url",
+                    search_paths=[
+                        "gmd:onlineResource/gmd:CI_OnlineResource/gmd:linkage/gmd:URL/text()",
+                    ],
+                    multiplicity="0..1",
+                ),
             ]
         ),
         GeminiElement(
@@ -234,7 +241,7 @@ class GeminiResponsibleParty(GeminiElement):
                 "gmd:role/gmd:CI_RoleCode/@codeListValue",
             ],
             multiplicity="0..1",
-        ),        
+        ),
     ]
 
 
@@ -975,7 +982,7 @@ class InspireDocument(MappedXmlDocument):
             ],
 
             multiplicity="0..1",
-        ),           
+        ),
         GeminiElement(
             name="vertical-extent",
             search_paths=[
@@ -1018,7 +1025,7 @@ class InspireDocument(MappedXmlDocument):
                 "gmd:distributionInfo/gmd:MD_Distribution/gmd:transferOptions/gmd:MD_DigitalTransferOptions/gmd:onLine/gmd:CI_OnlineResource",
             ],
             multiplicity="*",
-        ),               
+        ),
         GeminiResourceLocator(
             name="service-locator",
             search_paths=[
@@ -1090,7 +1097,7 @@ class InspireDocument(MappedXmlDocument):
         self.infer_tags(values)
         self.infer_publisher(values)
         self.infer_contact(values)
-        #self.infer_contact_email(values)
+        # self.infer_contact_email(values)
         self.infer_groups(values)
         self.infer_special_tags(values)
         self.infer_pointOfContact(values)
@@ -1123,19 +1130,24 @@ class InspireDocument(MappedXmlDocument):
 
     def infer_url(self, values):
         value = ''
+        used_datasets = []
         for locator in values['resource-locator']:
             if ('Weitere Informationen' in locator['name'] and 'den Datensatz' in locator['name']) or ('URL zu weiteren Informationen' in locator['name'] and 'den Datensatz' in locator['name']):
-                values['further_info'] = locator['url']            
+                values['further_info'] = locator['url']  
+            if 'Basisdaten' in locator['name']:
+                used_datasets.append(locator['name'])                  
             if locator['function'] == 'information':
                 value = locator['url']
                 break
         values['url'] = value
+        values['used_datasets'] = used_datasets 
 
     def infer_tags(self, values):
         tags = []
         for key in ['keyword-inspire-theme', 'keyword-controlled-other', 'keyword-free-text']:
             for item in values[key]:
                 if item not in tags:
+                    #item = item.encode('utf8')
                     tags.append(item)
         values['tags'] = tags
 
@@ -1168,7 +1180,7 @@ class InspireDocument(MappedXmlDocument):
     def infer_special_tags(self, values):
         
         tags = values['tags']
-        #print tags
+        # print tags
         size = len(values['keyword-list-with-thesaurus'])    
         xpath_keyword = "gmd:keyword/gco:CharacterString/text()"
 
@@ -1184,7 +1196,7 @@ class InspireDocument(MappedXmlDocument):
                     if item not in tags:
                         tags.append(item)
         
-        #print tags                
+        # print tags                
         values['special_tags'] = tags
   
                   
@@ -1236,7 +1248,7 @@ class InspireDocument(MappedXmlDocument):
                     adminitrativeArea = ''
                     postalCode = ''
                     address = ''
-                    email =''
+                    email = ''
                     individual_name = ''
                     organisation_name = ''
                     position_name = ''
@@ -1247,6 +1259,9 @@ class InspireDocument(MappedXmlDocument):
                         
                     if responsible_party['contact-info'].has_key('city'):
                         city = responsible_party['contact-info']['city']
+                        
+                    if responsible_party['contact-info'].has_key('url'):
+                        url = responsible_party['contact-info']['url']
                         
                     if responsible_party['contact-info'].has_key('adminitrativeArea'):
                         adminitrativeArea = responsible_party['contact-info']['adminitrativeArea']    
@@ -1269,8 +1284,6 @@ class InspireDocument(MappedXmlDocument):
                     if responsible_party.has_key('position-name'):
                         position_name = responsible_party['position-name']
                     
-                    if responsible_party.has_key('url'):
-                        url = responsible_party['url']
                                        
                     if deliveryPoint and postalCode:                     
                
@@ -1288,11 +1301,11 @@ class InspireDocument(MappedXmlDocument):
         
                     values[responsible_party['role'] + '-address'] = address 
                     values[responsible_party['role'] + '-email'] = email
-                    values[responsible_party['role'] + '-individual-name'] =  individual_name
-                    values[responsible_party['role'] + '-organisation-name'] =  organisation_name
+                    values[responsible_party['role'] + '-individual-name'] = individual_name
+                    values[responsible_party['role'] + '-organisation-name'] = organisation_name
                     values[responsible_party['role'] + '-position-name'] = position_name    
                     values[responsible_party['role'] + '-url'] = url    
-                    #print responsible_party['role']     
+                    # print responsible_party['role']     
 
     def infer_contact_email(self, values):
         value = ''
