@@ -341,9 +341,9 @@ class GeminiHarvester(SpatialHarvester):
 
         extras['access_constraints'] = gemini_values.get('limitations-on-public-access','')
         if gemini_values.has_key('temporal-extent-begin'):
-            extras['temporal_coverage-from'] = gemini_values['temporal-extent-begin']
+            extras['temporal_coverage_from'] = gemini_values['temporal-extent-begin']
         if gemini_values.has_key('temporal-extent-end'):
-            extras['temporal_coverage-to'] = gemini_values['temporal-extent-end']
+            extras['temporal_coverage_to'] = gemini_values['temporal-extent-end']
 
         # Save responsible organization roles
         parties = {}
@@ -698,9 +698,9 @@ class GeminiHarvester(SpatialHarvester):
 
 
         if len(gemini_values['temporal-extent-begin']) > 0:
-            extras['temporal_coverage-from'] =  self.get_datetime(gemini_values['temporal-extent-begin'][0])
+            extras['temporal_coverage_from'] =  self.get_datetime(gemini_values['temporal-extent-begin'][0])
         if len(gemini_values['temporal-extent-end']) > 0:
-            extras['temporal_coverage-to'] =  self.get_datetime(gemini_values['temporal-extent-end'][0])
+            extras['temporal_coverage_to'] =  self.get_datetime(gemini_values['temporal-extent-end'][0])
 
 
         # map INSPIRE constraint fields to OGPD license fields
