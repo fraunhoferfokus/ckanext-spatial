@@ -83,7 +83,7 @@ class SpatialHarvester(object):
     def _is_wms(self,url):
         try:
             capabilities_url = wms.WMSCapabilitiesReader().capabilities_url(url)
-            res = urllib2.urlopen(capabilities_url,None,10)
+            res = urllib2.urlopen(capabilities_url,None,10,timeout=10)
             xml = res.read()
 
             s = wms.WebMapService(url,xml=xml)
@@ -137,7 +137,7 @@ class SpatialHarvester(object):
 
     def _get_content(self, url):
         url = url.replace(' ','%20')
-        http_response = urllib2.urlopen(url)
+        http_response = urllib2.urlopen(url,timeout=10)
         return http_response.read()
 
     def _set_config(self,config_str):
@@ -509,7 +509,7 @@ class GeminiHarvester(SpatialHarvester):
         if url.endswith(".pdf"):
             return True
         else:
-            req = urllib2.urlopen(url)
+            req = urllib2.urlopen(url,timeout=10)
             headers = req.headers['content-type']
             #TODO application/octet-stream isbinary, accept as pdf?
             return 'application/pdf' in headers
@@ -520,7 +520,7 @@ class GeminiHarvester(SpatialHarvester):
             return True
         else:
             log.info('try to open url: %s' %url)
-            req = urllib2.urlopen(url)
+            req = urllib2.urlopen(url,timeout=10)
             headers = req.headers['content-type']
             if 'text/html' in headers:
                 log.info("%s is html page" %url)
@@ -530,7 +530,7 @@ class GeminiHarvester(SpatialHarvester):
     def _is_probably_wms(self, url):
         log.info('try to open url: %s' %url)
         try:
-            urllib2.urlopen(url)
+            urllib2.urlopen(url,timeout=10)
         except HTTPError :
             return False
         else:
@@ -678,11 +678,11 @@ class GeminiHarvester(SpatialHarvester):
               
         dates = []    
         
-        release_dates_combined = []
-        release_dates_combined.append(gemini_values['metadata-date'])
-        release_dates_combined = release_dates_combined + gemini_values['date-released']
+        #release_dates_combined = []
+        #release_dates_combined.append(gemini_values['metadata-date'])
+        #release_dates_combined = release_dates_combined + gemini_values['date-released']
         
-        release_dates = self.get_dates(release_dates_combined, u'veroeffentlicht')
+        release_dates = self.get_dates(gemini_values['date-released'], u'veroeffentlicht')
         creation_dates = self.get_dates(gemini_values['date-created'], u'erstellt')
         update_dates = self.get_dates(gemini_values['date-updated'], u'aktualisiert')
         
@@ -746,7 +746,7 @@ class GeminiHarvester(SpatialHarvester):
 			if gemini_values['pointOfContact-individual-name']:
 			    contact['role'] = 'ansprechpartner'
 			else:
-			    contact['role'] = ' veroeffentlichende_stelle'
+			    contact['role'] = 'veroeffentlichende_stelle'
 			    contact['name'] = gemini_values['pointOfContact-organisation-name']              
 		    else:                 
 			if role == 'owner' or role == 'author':
@@ -760,7 +760,6 @@ class GeminiHarvester(SpatialHarvester):
 				if role == 'distributer' or role == 'resourceProvider':
 				    contact['role'] = 'vertrieb'  
 				    
-		    #print contact['role']
 		    if len(contacts) > 0:
 			contains_role = False
 			for c in contacts:
@@ -806,26 +805,13 @@ class GeminiHarvester(SpatialHarvester):
 
 	if 'opendata' in tags2 or '#opendata_hh#' in tags2:
 		for tag in tags2:
-		    if tag != 'opendata' and tag != '#opendata_hh#':
+		    if tag != 'opendata' and tag != '#opendata_hh#' and tag not in gemini_values['groups']:
 		        tag = tag[:50] if len(tag) > 50 else tag
-		        #tag = re.sub('[^a-zA-Z0-9-_ ]*', '', tag)
 		        tag = unicode(tag)
 		        tags.append({'name':tag})
 		        
 	else:
 		return None
-                    
-        #if filter_word == 0: 
-            #raise Exception('The given Document does not contain special filter words!')
-        
-        '''
-        for t in gemini_values['tags']:          
-            tags.append({'name':type(t)})     
-            break          
-        '''        
-        #tag = 'nützlich'
-        #tag = tag.decode('utf8')
-        #tags.append({'name': tag}) 
          
              
        
@@ -854,20 +840,7 @@ class GeminiHarvester(SpatialHarvester):
             'resources' :[]          
         }
         
-         # extract in applications and services all given references to used datasets 
-        '''
-        used_datasets = []
-        if len(gemini_values['used_datasets']) > 0:
-            used_datasets = used_datasets + gemini_values['used_datasets']
-        if len(gemini_values['coupled-resource']) > 0:
-            used_dataset_url = 'http://gateway.hamburg.de/OGCFassade/HH_CSW.aspx?Service=CSW&Request=GetRecordById&Version=2.0.2&outputSchema=http://www.isotc211.org/2005/gmd&elementSetName=full'
-            for resource in gemini_values['coupled-resource']:
-                id = '&id=' + resource['uuid'][0]
-                url = used_dataset_url + id
-                used_datasets.append(url)
-        if len(used_datasets) > 0:
-            extras['used_datasets'] = used_datasets
-        '''     
+         # extract in applications and services all given references to used datasets     
                 
         used_datasets = []
         if len(gemini_values['used_datasets']) > 0:
@@ -941,17 +914,6 @@ class GeminiHarvester(SpatialHarvester):
         else:
 	    package_dict['type'] = 'datensatz'
 
-
-	'''
-            if 'document' in gemini_values['resource-type']:
-                package_dict['type'] = 'dokument'
-        
-            else:
-                if 'dataset' in gemini_values['resource-type'] or 'nonGeographicDataset' in gemini_values['resource-type'] or 'database' in gemini_values['resource-type'] or 'series' in gemini_values['resource-type']:
-                    package_dict['type'] = 'datensatz'
-                else:
-                    package_dict['type'] = 'dokument'
-          '''  
         
         
         #set url for further information
@@ -988,8 +950,7 @@ class GeminiHarvester(SpatialHarvester):
         if len(resource_locators):
             log.info("Found %s resources" %len(resource_locators))
             for resource_locator in resource_locators:
-                url = resource_locator.get('url','')
-                
+                url = resource_locator.get('url','')                
                 if url:
                     if self._is_valid_URL(url):
                         resource_format = ''
@@ -1015,7 +976,7 @@ class GeminiHarvester(SpatialHarvester):
                             {
                                 'url': url,
                                 'name': resource_locator.get('name',''),
-                                'description': resource_locator.get('description') if resource_locator.get('description') else 'Resource locator',
+                                'description': resource_locator.get('description') if resource_locator.get('description') else 'Ressource',
                                 'format': resource_format or None,
                                 'resource_locator_protocol': resource_locator.get('protocol',''),
                                 'resource_locator_function':resource_locator.get('function','')
@@ -1048,7 +1009,7 @@ class GeminiHarvester(SpatialHarvester):
                             {
                                 'url': url,
                                 'name': service_locator.get('name',''),
-                                'description': service_locator.get('description') if service_locator.get('description') else 'Resource locator',
+                                'description': service_locator.get('description') if service_locator.get('description') else 'Ressource',
                                 'format': service_format or None,
                                 'resource_locator_protocol': service_locator.get('protocol',''),
                                 'resource_locator_function':service_locator.get('function','')
@@ -1113,23 +1074,14 @@ class GeminiHarvester(SpatialHarvester):
             theparent = model.Package.by_name(name=package_dict['name'])
             for d in used_datasets_id:
                 thechild = model.Package.by_name(name=d)
-                
-                #thechild.add_relationship(u'links_to', theparent, u'basisdaten')
-                #theparent.add_relationship(u'linked_from', thechild, u'applikationen')
-                
-                
-                
                 rev = model.repo.new_revision()
                 theparent.add_relationship(u'links_to', thechild, u'basisdaten')
                 r = thechild.relationships_as_subject
                 model.repo.commit_and_remove()
-                #Session.add(thechild)
-                #r = thechild.relationships_as_subject
-                #log.debug('result of the relationship-request: %s', r)
+   
 
             for slug in used_datasets_id:
                
-                #groups = Session.query(model.Group.name).autoflush(False).filter_by(name=group_name)
                 url = ''
                 like_q = u'%s%%' % slug
                 pkg_query = Session.query(Package).filter(Package.name.ilike(like_q))
@@ -1157,7 +1109,7 @@ class GeminiHarvester(SpatialHarvester):
             Session.commit()
             
             # Refresh current object from session, otherwise the
-            # import paster command fails
+            # import paster command fails	
             Session.remove()
             Session.add(self.obj)
             Session.refresh(self.obj)
@@ -1171,13 +1123,10 @@ class GeminiHarvester(SpatialHarvester):
             if not self.obj.package:
                 self.obj.package = package
             
-    
+    		
             self.obj.current = True
             self.obj.save()
     
-    
-            #assert gemini_guid == [e['value'] for e in package['extras'] if e['key'] == 'guid'][0]
-            #assert self.obj.id == [e['value'] for e in package['extras'] if e['key'] == 'harvest_object_id'][0]
     
             return package
         
@@ -1198,15 +1147,18 @@ class GeminiHarvester(SpatialHarvester):
 
         if len(harvested_object) > 0:             
             obj = harvested_object[0]
-            #log.debug('RELATIONSHIP: %s', harvested_object[0])
             self.obj = obj 
             self.obj.save() 
             
             #Session.remove()
-            Session.expunge_all()
-            Session.add(self.obj)
-            Session.refresh(self.obj)
-            
+	    try:
+            	Session.expunge_all()
+            	Session.add(self.obj)
+            	Session.refresh(self.obj)
+            except:
+		Session.merge(self.obj)
+		log.debug('error occurend while updating the session')
+
             
             if obj.package:
                 packages = Session.query(model.Package.name).autoflush(False).filter_by(name=obj.package.name)
@@ -1247,10 +1199,15 @@ class GeminiHarvester(SpatialHarvester):
                 self.obj = obj  
                 self.obj.save()
                 
-                Session.expunge_all()
-                # Session.remove()
-                Session.add(self.obj)
-                Session.refresh(self.obj)
+		try:
+                	Session.expunge_all()
+		        # Session.remove()
+		        Session.add(self.obj)
+		        Session.refresh(self.obj)
+		except:
+		        Session.merge(self.obj)
+			log.debug('error occurend while updating the session')
+			
                 
             
                 package = self.write_package_from_inspire_string(obj.content, obj)
@@ -1296,7 +1253,7 @@ class GeminiHarvester(SpatialHarvester):
        
     def _is_valid_URL(self,url):
         try:
-            urllib2.urlopen(url)
+            urllib2.urlopen(url,timeout=10)
             return True
         except:
             return False 
