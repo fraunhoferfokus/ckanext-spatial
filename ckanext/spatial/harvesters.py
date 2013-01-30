@@ -1678,6 +1678,8 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
                     self._save_object_error('Empty record for GUID %s' % identifier,harvest_object)
                     return False
                 log.debug('XML content saved (len %s)', len(harvest_object.content))
+                # remove this xml file from temp dir
+                os.remove(tmpdir+self.temp_directory+"/"+xml_file)
                 return True
             except Exception, e:
                 self._save_object_error('Error saving the harvest object for GUID %s [%r]' % (identifier,e),harvest_object)
