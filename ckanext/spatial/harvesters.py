@@ -565,7 +565,7 @@ class GeminiHarvester(SpatialHarvester):
         gemini_guid = gemini_values['guid']
         
         self.related_data_ids.append(gemini_guid)
-	log.debug('RELATIONSHIP_PACKAGE: %s', gemini_guid)        
+        log.debug('RELATIONSHIP_PACKAGE: %s', gemini_guid)        
 
         # Save the metadata reference date in the Harvest Object
         try:
@@ -716,65 +716,65 @@ class GeminiHarvester(SpatialHarvester):
         
         # map INSPIRE responsible organisation fields to OGPD contacts
 
-	roles = ['publisher', 'owner', 'author', 'distributer', 'custodian', 'pointOfContact']
-	contacts = []
+        roles = ['publisher', 'owner', 'author', 'distributer', 'custodian', 'pointOfContact']
+        contacts = []
 
-	for role in roles:
-		contact = {}
-		if gemini_values.has_key(role + '-email') and gemini_values[role + '-email']: 
-		    contact['email'] = gemini_values[role + '-email']
-		  
-		if gemini_values.has_key(role + '-url') and gemini_values[role + '-url']: 
-		    contact['url'] = gemini_values[role + '-url']
+        for role in roles:
+            contact = {}
+            if gemini_values.has_key(role + '-email') and gemini_values[role + '-email']: 
+                contact['email'] = gemini_values[role + '-email']
+              
+            if gemini_values.has_key(role + '-url') and gemini_values[role + '-url']: 
+                contact['url'] = gemini_values[role + '-url']
+    
+            if gemini_values.has_key(role + '-individual-name'):  
+                if gemini_values[role + '-individual-name']:
+                    contact['name'] = gemini_values[role + '-individual-name']
+                else:
+                    if gemini_values.has_key(role + '-organisation-name'):
+                        contact['name'] = gemini_values[role + '-organisation-name']
+                    
+            if gemini_values.has_key(role + '-address') and gemini_values[role + '-address']:
+                contact['address'] = gemini_values[role + '-address']
 
-		if gemini_values.has_key(role + '-individual-name'):  
-		    if gemini_values[role + '-individual-name']:
-			contact['name'] = gemini_values[role + '-individual-name']
-		    else:
-			if gemini_values.has_key(role + '-organisation-name'):
-			    contact['name'] = gemini_values[role + '-organisation-name']
-			    
-		if gemini_values.has_key(role + '-address') and gemini_values[role + '-address']:
-		    contact['address'] = gemini_values[role + '-address']
 
 
+            if len(contact) != 0:
+                if role == 'custodian': 
+                    contact['role'] = 'ansprechpartner'                     
+                if role == 'pointOfContact':
+                    if gemini_values['pointOfContact-individual-name']:
+                        contact['role'] = 'ansprechpartner'
+                    else:
+                        contact['role'] = 'veroeffentlichende_stelle'
+                        contact['name'] = gemini_values['pointOfContact-organisation-name']              
+                else:                 
+                    if role == 'owner' or role == 'author':
+                        contact['role'] = 'autor'              
+                    else:                     
+                        if role == 'publisher':
+                            contact['role'] = 'veroeffentlichende_stelle'
+                            if gemini_values['pointOfContact-organisation-name']:
+                                contact['name'] = gemini_values['pointOfContact-organisation-name']
+                        else:                        
+                            if role == 'distributer' or role == 'resourceProvider':
+                                contact['role'] = 'vertrieb'  
+                        
+                if len(contacts) > 0:
+                    contains_role = False
+                    for c in contacts:
+                        if c['role'] == contact['role']: 
+                                contains_role = True
+                                break
+                    if not contains_role:
+                        contacts.append(contact)
+                else:
+                    contacts.append(contact)
 
-		if len(contact) != 0:
-		    if role == 'custodian': 
-			contact['role'] = 'ansprechpartner'                     
-		    if role == 'pointOfContact':
-			if gemini_values['pointOfContact-individual-name']:
-			    contact['role'] = 'ansprechpartner'
-			else:
-			    contact['role'] = 'veroeffentlichende_stelle'
-			    contact['name'] = gemini_values['pointOfContact-organisation-name']              
-		    else:                 
-			if role == 'owner' or role == 'author':
-			    contact['role'] = 'autor'              
-			else:                     
-			    if role == 'publisher':
-				contact['role'] = 'veroeffentlichende_stelle'
-				if gemini_values['pointOfContact-organisation-name']:
-				    contact['name'] = gemini_values['pointOfContact-organisation-name']
-			    else:                        
-				if role == 'distributer' or role == 'resourceProvider':
-				    contact['role'] = 'vertrieb'  
-				    
-		    if len(contacts) > 0:
-			contains_role = False
-			for c in contacts:
-			    if c['role'] == contact['role']: 
-				        contains_role = True
-				        break
-			if not contains_role:
-			    contacts.append(contact)
-		    else:
-			contacts.append(contact)
-
-       	extras['contacts'] = contacts
+        extras['contacts'] = contacts
 
         # Construct a GeoJSON extent so ckanext-spatial can register the extent geometry
-  	
+      
         extent_string = self.extent_template.substitute(
                 minx = gemini_values['bbox-east-long'],
                 miny = gemini_values['bbox-south-lat'],
@@ -784,7 +784,7 @@ class GeminiHarvester(SpatialHarvester):
 
         extras['spatial'] = extent_string.strip()
         
-	
+    
 
 
         if gemini_values.has_key('spatial-text'): 
@@ -803,19 +803,15 @@ class GeminiHarvester(SpatialHarvester):
         # Only [a-zA-Z0-9-_] is allowed, filter every other character
         tags = []
 
-	if 'opendata' in tags2 or '#opendata_hh#' in tags2:
-		for tag in tags2:
-		    if tag != 'opendata' and tag != '#opendata_hh#' and tag not in gemini_values['groups']:
-		        tag = tag[:50] if len(tag) > 50 else tag
-		        tag = unicode(tag)
-		        tags.append({'name':tag})
-		        
-	else:
-		return None
-         
-             
-       
-        
+        if 'opendata' in tags2 or '#opendata_hh#' in tags2:
+             for tag in tags2:
+                    if tag != 'opendata' and tag != '#opendata_hh#' and tag not in gemini_values['groups']:
+                        tag = tag[:50] if len(tag) > 50 else tag
+                        tag = unicode(tag)
+                        tags.append({'name':tag})         
+        else:
+            return None
+
         
         #add groups (mapped from ISO 19115 into OGD schema) 
         groups = []
@@ -912,7 +908,7 @@ class GeminiHarvester(SpatialHarvester):
         if 'application' in gemini_values['resource-type'] or 'service' in gemini_values['resource-type'] :
             package_dict['type'] = 'app'      
         else:
-	    package_dict['type'] = 'datensatz'
+            package_dict['type'] = 'datensatz'
 
         
         
@@ -945,9 +941,56 @@ class GeminiHarvester(SpatialHarvester):
             package_dict['name'] = package.name
 
         resource_locators = gemini_values.get('resource-locator', [])
+        service_locators = gemini_values.get('service-locator', [])
+        
+        # extract found services from resources and put them to the services
+        result_set = self.find_services_in_resources(service_locators, resource_locators)
+        resource_locators = result_set ['resources'] 
+        service_locators = result_set['services']
+        
+        # get all formats from the inspire file
+        formats = []
+        formats = self.get_data_format_from_inspire(gemini_values['data-format'] )
+        used_formats = []
+        contains_wfs = False
+        
+        
+        if len(service_locators):
+            log.info("Found %s service points" % len(resource_locators))
+            for service_locator in service_locators:
+                url = service_locator.get('url', '')
+                if url:
+                    if self._is_valid_URL(url):
+                        service_format = ''
+                        resource = {}
+                        
+                        service_format = self.get_service_name_from_url(url)
+                        resource['verified'] = True
 
-
+                        if service_format == 'WFS':
+                            contains_wfs = True
+                        
+                        resource.update(
+                            {
+                                'url': url,
+                                'name': service_locator.get('name',''),
+                                'description': service_locator.get('description') if service_locator.get('description') else 'Ressource',
+                                'format': service_format or None,
+                                'resource_locator_protocol': service_locator.get('protocol',''),
+                                'resource_locator_function':service_locator.get('function','')
+    
+                            })
+                        
+                        if not self.is_similar_url_in_services(url, service_locators) and not self.is_url_in_services(url, package_dict['resources']) and resource not in package_dict['resources']: 
+                            package_dict['resources'].append(resource)
+                           
+        
+        package_dict['resources'] = self.match_service_format(package_dict['resources'], formats, used_formats, contains_wfs)
+        
+        
+        
         if len(resource_locators):
+            
             log.info("Found %s resources" %len(resource_locators))
             for resource_locator in resource_locators:
                 url = resource_locator.get('url','')                
@@ -959,18 +1002,9 @@ class GeminiHarvester(SpatialHarvester):
                         #set the language of the resource 
                         if  len(gemini_values['dataset-language'] ) > 0:  
                             resource['language'] = gemini_values['dataset-language'][0]         
-
-                        if self._is_zib(url):
-                            resource_format = 'ZIP'
-                        else:
-                            if self._is_htm_or_html(url):
-                                continue
-                            if self._is_pdf_URI(url):
-                                resource_format = 'PDF'
-                            elif self._is_wms(url):
-                                resource['verified'] = True
-                                resource['verified_date'] = datetime.now().isoformat()
-                                resource_format = 'WMS'
+   
+                            
+                        resource_format = self.get_data_format_from_url(url)    
                             
                         resource.update(
                             {
@@ -982,40 +1016,9 @@ class GeminiHarvester(SpatialHarvester):
                                 'resource_locator_function':resource_locator.get('function','')
     
                             })
-                        package_dict['resources'].append(resource)
-                        
-                        resource_locators = gemini_values.get('resource-locator', [])
-
-        service_locators = gemini_values.get('service-locator', [])
-        
-        if len(service_locators):
-            log.info("Found %s service points" % len(resource_locators))
-            for service_locator in service_locators:
-                url = service_locator.get('url', '')
-                if url:
-                    if self._is_valid_URL(url):
-                        service_format = ''
-                        resource = {}
-                        if self._is_wms(url):
-                            resource['verified'] = True
-                            resource['verified_date'] = datetime.now().isoformat()
-                            service_format = 'WMS'
-                        elif self._is_probably_wms(url):
-                            # check if wms is alive
-                            service_format = 'WMS'
-                        else:
-                            log.info('Invalid WMS Service!')
-                        resource.update(
-                            {
-                                'url': url,
-                                'name': service_locator.get('name',''),
-                                'description': service_locator.get('description') if service_locator.get('description') else 'Ressource',
-                                'format': service_format or None,
-                                'resource_locator_protocol': service_locator.get('protocol',''),
-                                'resource_locator_function':service_locator.get('function','')
-    
-                            })
-                        package_dict['resources'].append(resource)    
+                        package_dict['resources'].append(resource)  
+                               
+            package_dict['resources'] = self.match_resource_format(package_dict['resources'], formats, used_formats)
 
             # Guess the best view service to use in WMS preview
             verified_view_resources = [r for r in package_dict['resources'] if 'verified' in r and r['format'] == 'WMS']
@@ -1109,7 +1112,7 @@ class GeminiHarvester(SpatialHarvester):
             Session.commit()
             
             # Refresh current object from session, otherwise the
-            # import paster command fails	
+            # import paster command fails    
             Session.remove()
             Session.add(self.obj)
             Session.refresh(self.obj)
@@ -1123,14 +1126,244 @@ class GeminiHarvester(SpatialHarvester):
             if not self.obj.package:
                 self.obj.package = package
             
-    		
+            
             self.obj.current = True
             self.obj.save()
     
     
             return package
+       
+
+
+
+    def _is_valid_URL(self,url):
+        '''
+        This method checks whether the given url has a 
+        valid url scheme and a valid netloc 
+        '''
         
- 
+        url_schema = urlparse(url)
+        if url_schema.netloc and url_schema.scheme:
+            return True
+        return False
+    
+    
+    def is_url_in_services(self, first_url, services):
+        '''
+        This method checks whether the given url is already in the list of services.
+        '''
+        first_url_schema = urlparse(first_url)  
+        
+        if len(services):
+            for service in services:
+                second_url = service['url']        
+                second_url_schema = urlparse(second_url)
+                
+                first_query = first_url_schema.query.split('&')
+                second_query = second_url_schema.query.split('&')
+                
+                # service requests which differ in their order of parameteres in its query were extracted 
+                if set(second_query) == set(first_query) and first_url_schema.scheme == second_url_schema.scheme and first_url_schema.path == second_url_schema.path:
+                    return True
+                
+                return False
+    
+    def is_similar_url_in_services(self,url,services):
+        '''
+        This method checks whether a similar version of a url is 
+        already presented in the list of services.
+        '''
+        url_schema = urlparse(url)
+        if len(services):
+            for service in services:
+                current_url = service.get('url', '')
+                if current_url != url:
+                    current_url_schema = urlparse(current_url)
+        
+                    if current_url_schema.path == url_schema.path and not url_schema.query or url_schema.query.startswith('version='):
+                        return True
+        return False
+  
+    def find_services_in_resources(self,services, resources):
+        '''
+        This method extracts all services which were defined in the inspire resource field
+        and puts them to right list.
+        '''
+        result = {}
+        found_services = []
+        if len(resources):
+            for resource in resources:
+                url = resource.get('url','') 
+                if 'SERVICE=' in url.upper():
+                    found_services.append(resource)
+                    #services.append(resource) 
+                    #resources.remove(resource)
+                    
+        for service in found_services:
+            services.append(service) 
+            resources.remove(service)
+            
+        result['resources'] = resources
+        result['services'] = services
+        return result
+        
+  
+    def match_service_format(self, services, formats, used_formats, contains_wfs):
+        '''
+        This method searchs for each service a suitable format from the format list
+        which is extracted from the inspire document.
+        '''
+        for service in services:
+            if service['format']:
+                if 'WFS' in service['format']:
+                    if 'GML' in formats or 'GML' in used_formats:
+                        service['format'] = 'GML'
+                        try:
+                            formats.remove('GML')
+                        except:
+                            print 'GML'
+                        used_formats.append('GML')
+                    elif 'GLM' in formats or 'GLM' in used_formats:
+                        service['format'] = 'GLM'
+                        formats.remove('GLM')
+                        used_formats.append('GLM')
+                        
+                elif 'WMS' in service['format'] and 'GML' in formats and not contains_wfs:
+                    service['format'] = 'GML'
+                    formats.remove('GML')
+                    used_formats.append('GML')
+            elif 'GML' in formats:
+                service['format'] = 'GML'
+                formats.remove('GML')
+                used_formats.append('GML')
+            
+        return services
+            
+  
+    def match_resource_format(self, resources, formats, used_formats):
+        '''
+        This method searchs for each resource a suitable format from the format list
+        which is extracted from the inspire document.
+        '''
+        import copy
+        found_formats = []
+    
+        for resource in resources:
+            if resource['format'] in formats:
+                found_formats.append(resource['format'])
+        
+        for f in found_formats:
+            try:
+                formats.remove(f)
+                used_formats.append(f)
+            except:
+                print f
+        
+        copied_resources = []
+        while True:
+            if len(formats)>0:
+                found_formats = []
+                copied_resources = []
+                for f in formats:
+                    if 'TIF' in f:
+                        for resource in resources:
+                            if resource['format']:
+                                if resource['format'] == 'JPEG':
+                                    resource_copy = copy.deepcopy(resource)
+                                    resource_copy['format'] = 'TIFF'
+                                    copied_resources.append(resource_copy)
+                                    resource['format'] = 'TIF'
+                                    found_formats.append(f)
+                                    break
+                    else:                    
+                        for resource in resources:
+                            if resource['format']:              
+                                if 'ZIP' in resource['format']  or 'WEB' in resource['format']:
+                                        if len(formats) != 1: 
+                                            resource_copy = copy.deepcopy(resource)
+                                            resource_copy['format'] = 'WEB'
+                                            copied_resources.append(resource_copy)
+                                            
+                                        resource['format'] = f                               
+                                        found_formats.append(f)
+                                        break
+                            else:
+                                resource['format'] = f
+                                found_formats.append(f)
+                                break
+                                    
+                for f in found_formats:
+                    try:
+                        formats.remove(f)
+                    except:
+                        print f 
+                        
+                for resource in copied_resources:
+                    resources.append(resource)  
+            else:
+                break 
+        
+        return resources              
+                
+  
+    def get_service_name_from_url(self, url):
+        '''
+         This method tries to find the service name.
+        '''
+        import string 
+        url_upper = string.upper(url)
+        if 'SERVICE=WFS' in url_upper:
+            return 'WFS'
+        elif 'SERVICE=WMS' in url_upper:
+            return 'WMS' 
+        elif 'WMSSERVER' in url_upper:
+            return 'WMS'
+        elif url.endswith('.zip'):
+            return 'ZIP'
+        else:
+            return None
+  
+    def get_data_format_from_inspire(self, data_formats):
+        '''
+         This method tries to relate all formats in the inspire document to a suitable mime type.
+        '''
+        formats = []
+        for f in data_formats:
+            if f['name'].isupper():
+                formats.append(f['name'])
+            else:
+                if 'GML' in f['name']:
+                    formats.append('GML')
+        return formats
+    
+    
+    def get_data_format_from_url(self, url):
+        '''
+         This method assigns a mime type to the given url according to its name.
+        '''
+        if 'ovl' in url:
+            return 'OV2'
+        elif 'ascii' in url:
+            return 'ASCII'
+        elif 'excel' in url:
+            return 'XLS'
+        elif url.endswith(".pdf"):
+            return 'PDF'
+        elif url.endswith(".zip"):
+            return 'ZIP'
+        elif url.endswith('.htm') or url.endswith('.html') or '.htm' in url or '.html' in url:
+            return 'WEB'
+        elif url.endswith('.jpg'):
+            return 'JPEG'
+        elif url.endswith('.xls'):
+            return 'XLS'
+        elif url.endswith('.txt'):
+            return 'TXT'
+        else:
+            return 'WEB'
+
+
+
     def harvest_individual_data(self,id,harvest_job):               
         
         log.debug('RELATIONSHIP_REQUEST: %s', id)
@@ -1151,13 +1384,13 @@ class GeminiHarvester(SpatialHarvester):
             self.obj.save() 
             
             #Session.remove()
-	    try:
-            	Session.expunge_all()
-            	Session.add(self.obj)
-            	Session.refresh(self.obj)
+            try:
+                    Session.expunge_all()
+                    Session.add(self.obj)
+                    Session.refresh(self.obj)
             except:
-		Session.merge(self.obj)
-		log.debug('error occurend while updating the session')
+                Session.merge(self.obj)
+                log.debug('error occurend while updating the session')
 
             
             if obj.package:
@@ -1199,17 +1432,15 @@ class GeminiHarvester(SpatialHarvester):
                 self.obj = obj  
                 self.obj.save()
                 
-		try:
-                	Session.expunge_all()
-		        # Session.remove()
-		        Session.add(self.obj)
-		        Session.refresh(self.obj)
-		except:
-		        Session.merge(self.obj)
-			log.debug('error occurend while updating the session')
-			
-                
+                try:
+                        Session.expunge_all()
+                        Session.add(self.obj)
+                        Session.refresh(self.obj)
+                except:
+                        Session.merge(self.obj)
+                        log.debug('error occurend while updating the session')
             
+
                 package = self.write_package_from_inspire_string(obj.content, obj)
             
                 if package is None:
@@ -1250,13 +1481,6 @@ class GeminiHarvester(SpatialHarvester):
             return (datetime.datetime.combine(d.date(), midnight)).isoformat()
     
     
-       
-    def _is_valid_URL(self,url):
-        try:
-            urllib2.urlopen(url,timeout=10)
-            return True
-        except:
-            return False 
     
     
     def translate_group(self, group):
