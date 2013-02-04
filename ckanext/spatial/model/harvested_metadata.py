@@ -1092,6 +1092,7 @@ class InspireDocument(MappedXmlDocument):
         self.infer_date_released(values)
         self.infer_date_updated(values)
         self.infer_date_created(values)
+        self.infer_special_url(values)
         self.infer_url(values)
         # Todo: Infer resources.
         self.infer_tags(values)
@@ -1128,19 +1129,31 @@ class InspireDocument(MappedXmlDocument):
 
 
 
-    def infer_url(self, values):
+    def infer_special_url(self, values):
         value = ''
         used_datasets = []
+        found_resources = []
         for locator in values['resource-locator']:
             if ('Weitere Informationen' in locator['name'] and 'den Datensatz' in locator['name']) or ('URL zu weiteren Informationen' in locator['name'] and 'den Datensatz' in locator['name']):
                 values['further_info'] = locator['url']  
+                found_resources.append(locator) 
             if 'Basisdaten' in locator['name']:
-                used_datasets.append(locator['name'])                  
+                used_datasets.append(locator['name']) 
+                found_resources.append(locator)              
+        values['used_datasets'] = used_datasets 
+        
+        for resource in found_resources:
+            values['resource-locator'].remove(resource)  
+        
+
+
+    def infer_url(self, values):
+        value = ''
+        for locator in values['resource-locator']:
             if locator['function'] == 'information':
                 value = locator['url']
                 break
         values['url'] = value
-        values['used_datasets'] = used_datasets 
 
     def infer_tags(self, values):
         tags = []

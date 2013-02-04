@@ -1240,14 +1240,11 @@ class GeminiHarvester(SpatialHarvester):
         return services
             
   
+
+
     def match_resource_format(self, resources, formats, used_formats):
-        '''
-        This method searchs for each resource a suitable format from the format list
-        which is extracted from the inspire document.
-        '''
         import copy
         found_formats = []
-    
         for resource in resources:
             if resource['format'] in formats:
                 found_formats.append(resource['format'])
@@ -1259,51 +1256,21 @@ class GeminiHarvester(SpatialHarvester):
             except:
                 print f
         
-        copied_resources = []
-        while True:
-            if len(formats)>0:
-                found_formats = []
-                copied_resources = []
+
+        if len(formats)>0:
                 for f in formats:
                     if 'TIF' in f:
                         for resource in resources:
                             if resource['format']:
                                 if resource['format'] == 'JPEG':
-                                    resource_copy = copy.deepcopy(resource)
-                                    resource_copy['format'] = 'TIFF'
-                                    copied_resources.append(resource_copy)
-                                    resource['format'] = 'TIF'
-                                    found_formats.append(f)
-                                    break
+                                    resource['format'] = 'TIF'                           
                     else:                    
                         for resource in resources:
                             if resource['format']:              
-                                if 'ZIP' in resource['format']  or 'WEB' in resource['format']:
-                                        if len(formats) != 1: 
-                                            resource_copy = copy.deepcopy(resource)
-                                            resource_copy['format'] = 'WEB'
-                                            copied_resources.append(resource_copy)
-                                            
-                                        resource['format'] = f                               
-                                        found_formats.append(f)
-                                        break
-                            else:
-                                resource['format'] = f
-                                found_formats.append(f)
-                                break
-                                    
-                for f in found_formats:
-                    try:
-                        formats.remove(f)
-                    except:
-                        print f 
-                        
-                for resource in copied_resources:
-                    resources.append(resource)  
-            else:
-                break 
-        
-        return resources              
+                                if 'ZIP' in resource['format'] or 'WEB' in resource['format'] or 'HTML' in resource['format']:
+                                    resource['format'] = f     
+                   
+        return resources           
                 
   
     def get_service_name_from_url(self, url):
@@ -1316,8 +1283,6 @@ class GeminiHarvester(SpatialHarvester):
             return 'WFS'
         elif 'SERVICE=WMS' in url_upper:
             return 'WMS' 
-        elif 'WMSSERVER' in url_upper:
-            return 'WMS'
         elif url.endswith('.zip'):
             return 'ZIP'
         else:
@@ -1352,7 +1317,7 @@ class GeminiHarvester(SpatialHarvester):
         elif url.endswith(".zip"):
             return 'ZIP'
         elif url.endswith('.htm') or url.endswith('.html') or '.htm' in url or '.html' in url:
-            return 'WEB'
+            return 'HTML'
         elif url.endswith('.jpg'):
             return 'JPEG'
         elif url.endswith('.xls'):
