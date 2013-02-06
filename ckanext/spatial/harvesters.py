@@ -874,7 +874,16 @@ class GeminiHarvester(SpatialHarvester):
         tags = []
         for tag in gemini_values['tags']:
             tag = tag[:50] if len(tag) > 50 else tag
-            tag = re.sub('[^a-zA-Z0-9-_ ]*', '', tag)
+            tag = tag.replace(unichr(196),'ae')
+            tag = tag.replace(unichr(228),'ae')
+            tag = tag.replace(unichr(214),'oe')
+            tag = tag.replace(unichr(246),'oe')
+            tag = tag.replace(unichr(220),'ue')
+            tag = tag.replace(unichr(252),'ue')
+            tag = tag.replace(u'ß','ss')
+            tag = tag.replace(u' ','-')
+
+            tag = re.sub('[^a-zA-Z0-9-_.]*', '', tag)
             tags.append({'name':tag})
 
         #add groups (mapped from ISO 19115 into OGD schema)
@@ -887,7 +896,8 @@ class GeminiHarvester(SpatialHarvester):
             categories.append({'name':cat})
 
         # TODO: the following line is only valid for portalU, pls keep that in mind
-        categories.append({'name':'umwelt_klima'})
+        if "portalu" in harvest_object.source.url:
+            categories.append({'name':'umwelt_klima'})
 
         package_dict = {
             'title': gemini_values['title'],
@@ -984,19 +994,16 @@ class GeminiHarvester(SpatialHarvester):
             if [resource for resource in package_dict['resources'] if resource['format'] != 'PDF' ]:
                 is_a_document = False
 
-            if is_a_document:
+            if is_a_document or 'document' in gemini_values['resource-type']:
                 package_dict['type'] = 'dokument'
             else:
                 #if 'service' in gemini_values['resource-type'] or 'application' in gemini_values['resource-type'] :
                 #    package_dict['type'] = 'app'
                 #else:
-                if 'document' in gemini_values['resource-type']:
-                    package_dict['type'] = 'dokument'
+                if 'dataset' in gemini_values['resource-type'] or 'nonGeographicDataset' in gemini_values['resource-type'] or 'database' in gemini_values['resource-type'] or  'series' in gemini_values['resource-type']:
+                    package_dict['type'] = 'datensatz'
                 else:
-                    if 'dataset' in gemini_values['resource-type'] or 'nonGeographicDataset' in gemini_values['resource-type'] or 'database' in gemini_values['resource-type'] or  'series' in gemini_values['resource-type']:
-                        package_dict['type'] = 'datensatz'
-                    else:
-                        package_dict['type'] = 'dokument'
+                    package_dict['type'] = 'dokument'
 
 
             self.copy_metadata_original_id_to_URL(package_dict)
@@ -1509,7 +1516,7 @@ class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
         used_identifiers = []
         ids = []
         try:
-            for identifier in self.csw.getidentifiers(limit=300,page=10):
+            for identifier in self.csw.getidentifiers(page=10):
                 try:
                     log.info('Got identifier %s from the CSW', identifier)
                     if identifier in used_identifiers:
@@ -1737,12 +1744,22 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
                         resource['verified_date'] = datetime.now().isoformat()
                         resource_format = 'WMS'
                     elif 'tabelleErgebnis' in url:
-                        log.info("Found XLS resource")
-                        resource_format = 'XLS'
-                        if url.endswith('.csv') or url.endswith('.xls'):
+                        log.info("Found valid resource")
+                        if url.endswith('.csv'):
+                            url = url.replace('tabelleErgebnis','tabelleDownload')[:-4] + '.csv'
+                            resource_format = 'CSV'
+                        elif url.endswith('.xls'):
                             url = url.replace('tabelleErgebnis','tabelleDownload')[:-4] + '.xls'
+                            resource_format = 'XLS'
+                        elif url.endswith('.xml'):
+                            url = url.replace('tabelleErgebnis','tabelleDownload')[:-4] + '.xml'
+                            resource_format = 'XML'
                         elif url.endswith('.html'):
                             url = url.replace('tabelleErgebnis','tabelleDownload')[:-5] + '.xls'
+                            resource_format = 'XLS'
+                        else:
+                            url = url.replace('tabelleErgebnis','tabelleDownload')[:-4] + '.xls'
+                            resource_format = 'XLS'
                     resource.update(
                         {
                             'url': url,
