@@ -1118,7 +1118,7 @@ class InspireDocument(MappedXmlDocument):
         value = []
         for key in ['service-date', 'dataset-date']:
             for date in values[key]:
-                if date['type'] == 'publication':
+                if date['type'] == 'publication' and date['value'] not in value:
                     value.append(date['value'])                
         values['date-released'] = value
 
@@ -1127,7 +1127,7 @@ class InspireDocument(MappedXmlDocument):
         # Use last of several multiple revision dates.
         for key in ['service-date', 'dataset-date']:
             for date in values[key]:
-                if date['type'] == 'revision':
+                if date['type'] == 'revision' and date['value'] not in value:
                     value.append(date['value'])
         values['date-updated'] = value
 
@@ -1135,7 +1135,7 @@ class InspireDocument(MappedXmlDocument):
         value = []
         for key in ['service-date', 'dataset-date']:
             for date in values[key]:
-                if date['type'] == 'creation':
+                if date['type'] == 'creation' and date['value'] not in value:
                     value.append(date['value'])
         values['date-created'] = value
 
