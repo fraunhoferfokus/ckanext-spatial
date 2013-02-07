@@ -754,13 +754,22 @@ class InspireDocument(MappedXmlDocument):
             multiplicity="*",
         ),
         GeminiReferenceDate(
-            name="dataset-reference-date",
+            name="dataset-date",
             search_paths=[
                 "gmd:identificationInfo/gmd:MD_DataIdentification/gmd:citation/gmd:CI_Citation/gmd:date/gmd:CI_Date",
                 "gmd:identificationInfo/srv:SV_ServiceIdentification/gmd:citation/gmd:CI_Citation/gmd:date/gmd:CI_Date",
             ],
             multiplicity="*",
         ),
+                
+        GeminiReferenceDate(
+            name="service-date",
+            search_paths=[
+                "gmd:identificationInfo/srv:SV_ServiceIdentification/gmd:citation/gmd:CI_Citation/gmd:date/gmd:CI_Date",
+            ],
+            multiplicity="*",
+        ),
+                
         # # Todo: Suggestion from PP not to bother pulling this into the package.
         # GeminiElement(
         # name="unique-resource-identifier",
@@ -1107,26 +1116,28 @@ class InspireDocument(MappedXmlDocument):
 
     def infer_date_released(self, values):
         value = []
-        for date in values['dataset-reference-date']:
-            if date['type'] == 'publication':
-                value.append(date['value'])
+        for key in ['service-date', 'dataset-date']:
+            for date in values[key]:
+                if date['type'] == 'publication':
+                    value.append(date['value'])                
         values['date-released'] = value
 
     def infer_date_updated(self, values):
         value = []
         # Use last of several multiple revision dates.
-        for date in values['dataset-reference-date']:
-            if date['type'] == 'revision':
-                value.append(date['value'])
+        for key in ['service-date', 'dataset-date']:
+            for date in values[key]:
+                if date['type'] == 'revision':
+                    value.append(date['value'])
         values['date-updated'] = value
 
     def infer_date_created(self, values):
         value = []
-        for date in values['dataset-reference-date']:
-            if date['type'] == 'creation':
-                value.append(date['value'])
+        for key in ['service-date', 'dataset-date']:
+            for date in values[key]:
+                if date['type'] == 'creation':
+                    value.append(date['value'])
         values['date-created'] = value
-
 
 
     def infer_special_url(self, values):
