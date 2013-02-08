@@ -710,7 +710,8 @@ class GeminiHarvester(SpatialHarvester):
 
         # terms of use == null indicates to drop the entry completely
         if terms_of_use is None:
-                return None
+                log.error('Package with GUID %s does not contain any licenses, skip this package' % self.obj.guid)
+		return None
 
         extras['terms_of_use'] = terms_of_use
         

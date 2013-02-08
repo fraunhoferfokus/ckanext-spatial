@@ -23,8 +23,8 @@ def translate_license_data(gemini):
 
         # Default values
         terms_of_use = { 'license_id' : 'other-closed',
-                         'license_url' : '',
-                         'other' : '' }
+                         'license_url' : None,
+                         'other' : None }
 
         # English-German translation for MD_RestrictionCodes
         code_translation = { 'copyright'                    : 'Urheberrecht',
@@ -69,8 +69,11 @@ def translate_license_data(gemini):
                 if word in constraint:
                     terms_of_use['license_id'] = constraint_translation[word]
                     gemini['use-limitations'].remove(constraint) 
-                    name = constraint.split('Namensnennung: ')[1]
-                    name = 'Namensnennung: ' + name.replace('\"', '')
+                    name = None
+                    if 'Namensnennung:' in constraint:
+                        name = constraint.split('Namensnennung:')[1]
+                        name = 'Namensnennung:' + name.replace('\"', '')
+                        
                     terms_of_use['other'] = name
                  
 
@@ -80,7 +83,7 @@ def translate_license_data(gemini):
                 
                     
         # If terms of use ID is null drop the entry
-        if terms_of_use['license_id'] is None:
+        if terms_of_use['license_url'] is None and terms_of_use['other'] is None:
                 return None
         else:
                 return terms_of_use
