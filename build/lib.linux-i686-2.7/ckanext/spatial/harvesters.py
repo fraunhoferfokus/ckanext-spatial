@@ -77,6 +77,8 @@ def text_traceback():
 # When developing, it might be helpful to 'export DEBUG=1' to reraise the
 debug_exception_mode = bool(os.getenv('DEBUG'))
 
+
+
 class SpatialHarvester(object):
     # Q: Why does this not inherit from HarvesterBase in ckanext-harvest?
 
@@ -953,6 +955,7 @@ class GeminiHarvester(SpatialHarvester):
         formats = self.get_data_format_from_inspire(gemini_values['data-format'] )
         used_formats = []
         contains_wfs = False
+        format_is_set = False
         
         
         if len(service_locators):
@@ -964,9 +967,21 @@ class GeminiHarvester(SpatialHarvester):
                         service_format = ''
                         resource = {}
                         
-                        service_format = self.get_service_name_from_url(url)
+                        service_des = service_locator.get('description')
+                        service_format = None
+                        if service_des:                          
+                            if 'Format:' in service_des:
+                                    format_is_set = True
+                                    for service in self.service_formats:
+                                        if service_des in resource:
+                                            service_format = resource
+                            else:      
+                                service_format = self.get_service_name_from_url(url)
+                        else:      
+                            service_format = self.get_service_name_from_url(url)
+                        
                         resource['verified'] = True
-
+                        
                         if service_format == 'WFS':
                             contains_wfs = True
                         
@@ -974,8 +989,9 @@ class GeminiHarvester(SpatialHarvester):
                             {
                                 'url': url,
                                 'name': service_locator.get('name',''),
-                                'description': service_locator.get('description') if service_locator.get('description') else 'Ressource',
-                                'format': service_format or None,
+                                'description':  service_locator.get('description') if service_locator.get('description') else 'Ressource',
+                                'format':service_format or None,
+                                'type' : 'api',
                                 'resource_locator_protocol': service_locator.get('protocol',''),
                                 'resource_locator_function':service_locator.get('function','')
     
@@ -983,12 +999,13 @@ class GeminiHarvester(SpatialHarvester):
                         
                         if not self.is_similar_url_in_services(url, service_locators) and not self.is_url_in_services(url, package_dict['resources']) and resource not in package_dict['resources']: 
                             package_dict['resources'].append(resource)
+                            
                            
+        if not format_is_set:
+            package_dict['resources'] = self.match_service_format(package_dict['resources'], formats, used_formats, contains_wfs)
         
-        package_dict['resources'] = self.match_service_format(package_dict['resources'], formats, used_formats, contains_wfs)
         
-        
-        
+        format_is_set = False
         if len(resource_locators):
             
             log.info("Found %s resources" %len(resource_locators))
@@ -1002,23 +1019,53 @@ class GeminiHarvester(SpatialHarvester):
                         #set the language of the resource 
                         if  len(gemini_values['dataset-language'] ) > 0:  
                             resource['language'] = gemini_values['dataset-language'][0]         
-   
-                            
-                        resource_format = self.get_data_format_from_url(url)    
-                            
+                        
+                        resource_format = ''
+                        resource_des = resource_locator.get('description')
+                        if resource_des:
+                            if 'Format:' in resource_des:
+                                    format_is_set = True
+                                    for resource in self.resource_formats:
+                                        if resource_des in resource:
+                                            resource_format = resource
+                            else:       
+                                resource_format = self.get_data_format_from_url(url)   
+                        else:
+                            resource_format = self.get_data_format_from_url(url)    
+                        
+                         
                         resource.update(
                             {
                                 'url': url,
                                 'name': resource_locator.get('name',''),
                                 'description': resource_locator.get('description') if resource_locator.get('description') else 'Ressource',
                                 'format': resource_format or None,
+                                'type' : 'file',
                                 'resource_locator_protocol': resource_locator.get('protocol',''),
                                 'resource_locator_function':resource_locator.get('function','')
     
                             })
                         package_dict['resources'].append(resource)  
-                               
-            package_dict['resources'] = self.match_resource_format(package_dict['resources'], formats, used_formats)
+            
+            if not format_is_set:                   
+                package_dict['resources'] = self.match_resource_format(package_dict['resources'], formats, used_formats)
+
+            
+
+            # Guess the best view service to use in WMS preview
+            verified_view_resources = [r for r in package_dict['resources'] if 'verified' in r and r['format'] == 'WMS']
+            if len(verified_view_resources):
+                verified_view_resources[0]['ckan_recommended_wms_preview'] = True
+            else:
+                view_resources = [r for r in package_dict['resources'] if r['format'] == 'WMS']
+                if len(view_resources):
+                    view_resources[0]['ckan_recommended_wms_preview'] = True
+                    
+       
+       
+       
+       
+       
 
             # Guess the best view service to use in WMS preview
             verified_view_resources = [r for r in package_dict['resources'] if 'verified' in r and r['format'] == 'WMS']
@@ -1136,6 +1183,7 @@ class GeminiHarvester(SpatialHarvester):
 
 
 
+   
     def _is_valid_URL(self,url):
         '''
         This method checks whether the given url has a 
@@ -1217,28 +1265,33 @@ class GeminiHarvester(SpatialHarvester):
             if service['format']:
                 if 'WFS' in service['format']:
                     if 'GML' in formats or 'GML' in used_formats:
-                        service['format'] = 'GML'
+                        service['format'] = self.validate_resource('GML')
                         try:
                             formats.remove('GML')
                         except:
                             print 'GML'
                         used_formats.append('GML')
-                    elif 'GLM' in formats or 'GLM' in used_formats:
-                        service['format'] = 'GLM'
-                        formats.remove('GLM')
-                        used_formats.append('GLM')
-                        
                 elif 'WMS' in service['format'] and 'GML' in formats and not contains_wfs:
-                    service['format'] = 'GML'
+                    service['format'] = self.validate_resource('GML')
                     formats.remove('GML')
                     used_formats.append('GML')
             elif 'GML' in formats:
-                service['format'] = 'GML'
+                service['format'] = self.validate_resource('GML')
                 formats.remove('GML')
                 used_formats.append('GML')
             
         return services
             
+  
+    def validate_resource(self,resource_format):
+        '''
+        Returns the given resource if the format list contains the format 
+        of the resource. Otherwise it returns an empty string.
+        '''
+        if resource_format in self.resource_formats or resource_format in self.service_formats:
+            return resource_format 
+        return ''
+    
   
     def match_resource_format(self, resources, formats, used_formats):
         '''
@@ -1247,7 +1300,6 @@ class GeminiHarvester(SpatialHarvester):
         '''
         import copy
         found_formats = []
-    
         for resource in resources:
             if resource['format'] in formats:
                 found_formats.append(resource['format'])
@@ -1260,10 +1312,7 @@ class GeminiHarvester(SpatialHarvester):
                 print f
         
         copied_resources = []
-        while True:
-            if len(formats)>0:
-                found_formats = []
-                copied_resources = []
+        if len(formats)>0:
                 for f in formats:
                     if 'TIF' in f:
                         for resource in resources:
@@ -1272,56 +1321,40 @@ class GeminiHarvester(SpatialHarvester):
                                     resource_copy = copy.deepcopy(resource)
                                     resource_copy['format'] = 'TIFF'
                                     copied_resources.append(resource_copy)
-                                    resource['format'] = 'TIF'
-                                    found_formats.append(f)
-                                    break
+                                    resource['format'] = self.validate_resource('TIF')
+                           
                     else:                    
                         for resource in resources:
                             if resource['format']:              
-                                if 'ZIP' in resource['format']  or 'WEB' in resource['format']:
-                                        if len(formats) != 1: 
-                                            resource_copy = copy.deepcopy(resource)
-                                            resource_copy['format'] = 'WEB'
-                                            copied_resources.append(resource_copy)
-                                            
-                                        resource['format'] = f                               
-                                        found_formats.append(f)
-                                        break
-                            else:
-                                resource['format'] = f
-                                found_formats.append(f)
-                                break
+                                if 'ZIP' in resource['format'] or 'WEB' in resource['format'] or 'HTML' in resource['format']:
+                                    resource['format'] = self.validate_resource(f)     
                                     
-                for f in found_formats:
-                    try:
-                        formats.remove(f)
-                    except:
-                        print f 
-                        
-                for resource in copied_resources:
-                    resources.append(resource)  
-            else:
-                break 
-        
-        return resources              
-                
+        for resource in copied_resources:
+                    resources.append(resource) 
+                   
+        return resources  
   
     def get_service_name_from_url(self, url):
         '''
          This method tries to find the service name.
         '''
         import string 
+        service = None
+        
         url_upper = string.upper(url)
         if 'SERVICE=WFS' in url_upper:
-            return 'WFS'
+            service = 'WFS'
         elif 'SERVICE=WMS' in url_upper:
-            return 'WMS' 
+            service = 'WMS' 
         elif 'WMSSERVER' in url_upper:
-            return 'WMS'
+            service = 'WMS'
         elif url.endswith('.zip'):
-            return 'ZIP'
-        else:
-            return None
+            service = 'ZIP'
+        
+        if service:
+            return self.validate_resource(service)
+        
+        return None
   
     def get_data_format_from_inspire(self, data_formats):
         '''
@@ -1339,29 +1372,31 @@ class GeminiHarvester(SpatialHarvester):
     
     def get_data_format_from_url(self, url):
         '''
-         This method assigns a mime type to the given url according to its name.
+        This method assigns a mime type to the given url according to its name.
         '''
-        if 'ovl' in url:
-            return 'OV2'
-        elif 'ascii' in url:
-            return 'ASCII'
-        elif 'excel' in url:
-            return 'XLS'
-        elif url.endswith(".pdf"):
-            return 'PDF'
-        elif url.endswith(".zip"):
-            return 'ZIP'
-        elif url.endswith('.htm') or url.endswith('.html') or '.htm' in url or '.html' in url:
-            return 'WEB'
-        elif url.endswith('.jpg'):
-            return 'JPEG'
-        elif url.endswith('.xls'):
-            return 'XLS'
-        elif url.endswith('.txt'):
-            return 'TXT'
-        else:
-            return 'WEB'
+        resource = ''
 
+        if 'ascii' in url:
+            resource = 'ASCII'
+        elif 'excel' in url:
+            resource ='XLS'
+        elif url.endswith(".pdf"):
+            resource = 'PDF'
+        elif url.endswith(".zip"):
+            resource = 'ZIP'
+        elif url.endswith('.htm') or url.endswith('.html') or '.htm' in url or '.html' in url:
+            resource = 'HTML'
+        elif url.endswith('.jpg'):
+            resource = 'JPEG'
+        elif url.endswith('.xls'):
+            resource = 'XLS'
+        elif url.endswith('.txt'):
+            resource = 'TXT'
+        else:
+            resource = 'WEB'
+        
+        return self.validate_resource(resource)
+   
 
 
     def harvest_individual_data(self,id,harvest_job):               
@@ -1370,10 +1405,7 @@ class GeminiHarvester(SpatialHarvester):
     
         if id in self.related_data_ids:
                 return None  
-   
-        #theparent = model.Package.by_name(name=package_dict['name'])
-   
-   
+
         harvested_object = Session.query(HarvestObject) \
                     .filter(HarvestObject.guid==id) \
                     .all()
@@ -1382,8 +1414,7 @@ class GeminiHarvester(SpatialHarvester):
             obj = harvested_object[0]
             self.obj = obj 
             self.obj.save() 
-            
-            #Session.remove()
+        
             try:
                     Session.expunge_all()
                     Session.add(self.obj)
@@ -1417,7 +1448,7 @@ class GeminiHarvester(SpatialHarvester):
  
         else:       
      
-            csw = CswService('http://gateway.hamburg.de/OGCFassade/HH_CSW.aspx')
+            csw = CswService('http://hmdk.de/csw')
     
             data = csw.getrecordbyid([id])
             
@@ -1981,6 +2012,34 @@ class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
     job = None
     related_data_ids=[]
     version = 'v1.0'
+    resource_formats = ['BMP',
+                        'ASCII',
+                        'XML',
+                        'XLS',
+                        'TXT',
+                        'TIF',
+                        'DATA',
+                        'SHP',
+                        'PDF',
+                        'MDB',
+                        'JPEG',
+                        'HTML',
+                        'GML',
+                        'ZIP',
+                        'GIF',
+                        'DOC',
+                        'CSV'
+                        ]
+    
+    service_formats = [
+                       'WINDOWS',
+                       'WEB',
+                       'IOS',
+                       'ANDROID',
+                       'WMS',
+                       'WFS',
+                       'ANDERE PLATTFORM'
+                       ]
     
     def info(self):
         return {

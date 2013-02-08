@@ -754,13 +754,22 @@ class InspireDocument(MappedXmlDocument):
             multiplicity="*",
         ),
         GeminiReferenceDate(
-            name="dataset-reference-date",
+            name="dataset-date",
             search_paths=[
                 "gmd:identificationInfo/gmd:MD_DataIdentification/gmd:citation/gmd:CI_Citation/gmd:date/gmd:CI_Date",
                 "gmd:identificationInfo/srv:SV_ServiceIdentification/gmd:citation/gmd:CI_Citation/gmd:date/gmd:CI_Date",
             ],
             multiplicity="*",
         ),
+                
+        GeminiReferenceDate(
+            name="service-date",
+            search_paths=[
+                "gmd:identificationInfo/srv:SV_ServiceIdentification/gmd:citation/gmd:CI_Citation/gmd:date/gmd:CI_Date",
+            ],
+            multiplicity="*",
+        ),
+                
         # # Todo: Suggestion from PP not to bother pulling this into the package.
         # GeminiElement(
         # name="unique-resource-identifier",
@@ -1092,6 +1101,7 @@ class InspireDocument(MappedXmlDocument):
         self.infer_date_released(values)
         self.infer_date_updated(values)
         self.infer_date_created(values)
+        self.infer_special_url(values)
         self.infer_url(values)
         # Todo: Infer resources.
         self.infer_tags(values)
@@ -1106,41 +1116,54 @@ class InspireDocument(MappedXmlDocument):
 
     def infer_date_released(self, values):
         value = []
-        for date in values['dataset-reference-date']:
-            if date['type'] == 'publication':
-                value.append(date['value'])
+        for key in ['service-date', 'dataset-date']:
+            for date in values[key]:
+                if date['type'] == 'publication' and date['value'] not in value:
+                    value.append(date['value'])                
         values['date-released'] = value
 
     def infer_date_updated(self, values):
         value = []
         # Use last of several multiple revision dates.
-        for date in values['dataset-reference-date']:
-            if date['type'] == 'revision':
-                value.append(date['value'])
+        for key in ['service-date', 'dataset-date']:
+            for date in values[key]:
+                if date['type'] == 'revision' and date['value'] not in value:
+                    value.append(date['value'])
         values['date-updated'] = value
 
     def infer_date_created(self, values):
         value = []
-        for date in values['dataset-reference-date']:
-            if date['type'] == 'creation':
-                value.append(date['value'])
+        for key in ['service-date', 'dataset-date']:
+            for date in values[key]:
+                if date['type'] == 'creation' and date['value'] not in value:
+                    value.append(date['value'])
         values['date-created'] = value
 
 
-
-    def infer_url(self, values):
+    def infer_special_url(self, values):
         value = ''
         used_datasets = []
+        found_resources = []
         for locator in values['resource-locator']:
             if ('Weitere Informationen' in locator['name'] and 'den Datensatz' in locator['name']) or ('URL zu weiteren Informationen' in locator['name'] and 'den Datensatz' in locator['name']):
                 values['further_info'] = locator['url']  
+                found_resources.append(locator) 
             if 'Basisdaten' in locator['name']:
-                used_datasets.append(locator['name'])                  
+                used_datasets.append(locator['name']) 
+                found_resources.append(locator)              
+        values['used_datasets'] = used_datasets 
+        
+        for resource in found_resources:
+            values['resource-locator'].remove(resource)  
+        
+
+    def infer_url(self, values):
+        value = ''
+        for locator in values['resource-locator']:
             if locator['function'] == 'information':
                 value = locator['url']
                 break
         values['url'] = value
-        values['used_datasets'] = used_datasets 
 
     def infer_tags(self, values):
         tags = []

@@ -1157,7 +1157,6 @@ class InspireDocument(MappedXmlDocument):
             values['resource-locator'].remove(resource)  
         
 
-
     def infer_url(self, values):
         value = ''
         for locator in values['resource-locator']:
