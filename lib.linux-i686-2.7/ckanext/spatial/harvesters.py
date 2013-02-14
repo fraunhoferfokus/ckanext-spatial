@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python 
 # -*- coding: utf-8 -*-
 
 '''
@@ -11,8 +11,8 @@ but can be easily adapted for other INSPIRE/ISO19139 XML metadata
     - GeminiWafHarvester - An index page with links to GEMINI resources
 
 TODO: Harvesters for generic INSPIRE CSW servers
-
 '''
+
 import cgitb
 import warnings
 import urllib2
@@ -77,13 +77,15 @@ def text_traceback():
 # When developing, it might be helpful to 'export DEBUG=1' to reraise the
 debug_exception_mode = bool(os.getenv('DEBUG'))
 
+
+
 class SpatialHarvester(object):
     # Q: Why does this not inherit from HarvesterBase in ckanext-harvest?
 
     def _is_wms(self,url):
         try:
             capabilities_url = wms.WMSCapabilitiesReader().capabilities_url(url)
-            res = urllib2.urlopen(capabilities_url,None,10)
+            res = urllib2.urlopen(capabilities_url,None,10,timeout=10)
             xml = res.read()
 
             s = wms.WebMapService(url,xml=xml)
@@ -137,7 +139,7 @@ class SpatialHarvester(object):
 
     def _get_content(self, url):
         url = url.replace(' ','%20')
-        http_response = urllib2.urlopen(url)
+        http_response = urllib2.urlopen(url,timeout=10)
         return http_response.read()
 
     def _set_config(self,config_str):
@@ -179,7 +181,7 @@ class GeminiHarvester(SpatialHarvester):
 
     force_import = False
 
-    extent_template = Template('''{"type":"Polygon","coordinates":[[$minx, $miny],[$minx, $maxy], [$maxx, $maxy], [$maxx, $miny], [$minx, $miny]]}
+    extent_template = Template('''{"type":"Polygon","coordinates":[[[$minx, $miny],[$minx, $maxy], [$maxx, $maxy], [$maxx, $miny], [$minx, $miny]]]}
     ''')   
 
     def import_stage(self, harvest_object):
@@ -341,9 +343,9 @@ class GeminiHarvester(SpatialHarvester):
 
         extras['access_constraints'] = gemini_values.get('limitations-on-public-access','')
         if gemini_values.has_key('temporal-extent-begin'):
-            extras['temporal_coverage-from'] = gemini_values['temporal-extent-begin']
+            extras['temporal_coverage_from'] = gemini_values['temporal-extent-begin']
         if gemini_values.has_key('temporal-extent-end'):
-            extras['temporal_coverage-to'] = gemini_values['temporal-extent-end']
+            extras['temporal_coverage_to'] = gemini_values['temporal-extent-end']
 
         # Save responsible organization roles
         parties = {}
@@ -509,7 +511,7 @@ class GeminiHarvester(SpatialHarvester):
         if url.endswith(".pdf"):
             return True
         else:
-            req = urllib2.urlopen(url)
+            req = urllib2.urlopen(url,timeout=10)
             headers = req.headers['content-type']
             #TODO application/octet-stream isbinary, accept as pdf?
             return 'application/pdf' in headers
@@ -520,7 +522,7 @@ class GeminiHarvester(SpatialHarvester):
             return True
         else:
             log.info('try to open url: %s' %url)
-            req = urllib2.urlopen(url)
+            req = urllib2.urlopen(url,timeout=10)
             headers = req.headers['content-type']
             if 'text/html' in headers:
                 log.info("%s is html page" %url)
@@ -530,7 +532,7 @@ class GeminiHarvester(SpatialHarvester):
     def _is_probably_wms(self, url):
         log.info('try to open url: %s' %url)
         try:
-            urllib2.urlopen(url)
+            urllib2.urlopen(url,timeout=10)
         except HTTPError :
             return False
         else:
@@ -547,7 +549,7 @@ class GeminiHarvester(SpatialHarvester):
     
     def write_package_from_inspire_string(self, content, harvest_object):
         '''Create or update a package based on fetched INSPIRE content'''
-
+        
         log = logging.getLogger(__name__ + '.import')
         package = None
         
@@ -564,6 +566,9 @@ class GeminiHarvester(SpatialHarvester):
 
         gemini_guid = gemini_values['guid']
         
+        self.related_data_ids.append(gemini_guid)
+        #log.debug('RELATIONSHIP_PACKAGE: %s', gemini_guid)        
+
         # Save the metadata reference date in the Harvest Object
         try:
             metadata_modified_date = datetime.strptime(gemini_values['metadata-date'],'%Y-%m-%d')
@@ -586,7 +591,7 @@ class GeminiHarvester(SpatialHarvester):
             last_harvested_object = last_harvested_object[0]
         elif len(last_harvested_object) > 1:
                 raise Exception('Application Error: more than one current record for GUID %s' % gemini_guid)
-
+          
         reactivate_package = False
         if last_harvested_object:
             
@@ -611,19 +616,14 @@ class GeminiHarvester(SpatialHarvester):
                 # new document has a more recent modified date
                 if package.state == u'deleted':
                     if last_harvested_object.metadata_modified_date < self.obj.metadata_modified_date:
-                        log.info('Package for object with GUID %s will be re-activated' % gemini_guid)
+                        #log.info('Package for object with GUID %s will be re-activated' % gemini_guid)
                         reactivate_package = True
                     else:
-                         log.info('Remote record with GUID %s is not more recent than a deleted package, skipping... ' % gemini_guid)
+                         #log.info('Remote record with GUID %s is not more recent than a deleted package, skipping... ' % gemini_guid)
                          return None
 
             else:
-                if last_harvested_object.content != self.obj.content and \
-                 last_harvested_object.metadata_modified_date == self.obj.metadata_modified_date:
-                    raise Exception('The contents of document with GUID %s changed, but the metadata date has not been updated' % gemini_guid)
-                else:
-                    # The content hasn't changed, no need to update the package
-                    log.info('Document with GUID %s unchanged, skipping...' % (gemini_guid))
+                #log.info('Document with GUID %s unchanged, skipping...' % (gemini_guid))
                 return None
         else:
             log.info('No package with INSPIRE guid %s found, let''s create one' % gemini_guid)
@@ -680,11 +680,11 @@ class GeminiHarvester(SpatialHarvester):
               
         dates = []    
         
-        release_dates_combined = []
-        release_dates_combined.append(gemini_values['metadata-date'])
-        release_dates_combined = release_dates_combined + gemini_values['date-released']
+        #release_dates_combined = []
+        #release_dates_combined.append(gemini_values['metadata-date'])
+        #release_dates_combined = release_dates_combined + gemini_values['date-released']
         
-        release_dates = self.get_dates(release_dates_combined, u'veroeffentlicht')
+        release_dates = self.get_dates(gemini_values['date-released'], u'veroeffentlicht')
         creation_dates = self.get_dates(gemini_values['date-created'], u'erstellt')
         update_dates = self.get_dates(gemini_values['date-updated'], u'aktualisiert')
         
@@ -695,14 +695,14 @@ class GeminiHarvester(SpatialHarvester):
  
  
         extras['subgroups'] = gemini_values['topic-category']
-        log.debug('Set subgroups: ' + str(gemini_values['topic-category']))
+        #log.debug('Set subgroups: ' + str(gemini_values['topic-category']))
 
 
 
         if len(gemini_values['temporal-extent-begin']) > 0:
-            extras['temporal_coverage-from'] = gemini_values['temporal-extent-begin'][0]
+            extras['temporal_coverage_from'] =  self.get_datetime(gemini_values['temporal-extent-begin'][0])
         if len(gemini_values['temporal-extent-end']) > 0:
-            extras['temporal_coverage-to'] = gemini_values['temporal-extent-end'][0]
+            extras['temporal_coverage_to'] =  self.get_datetime(gemini_values['temporal-extent-end'][0])
 
 
         # map INSPIRE constraint fields to OGPD license fields
@@ -710,67 +710,74 @@ class GeminiHarvester(SpatialHarvester):
 
         # terms of use == null indicates to drop the entry completely
         if terms_of_use is None:
+                log.error('Package with GUID %s does not contain any licenses, skip this package' % self.obj.guid)
                 return None
 
         extras['terms_of_use'] = terms_of_use
         
         
+        
         # map INSPIRE responsible organisation fields to OGPD contacts
+
         roles = ['publisher', 'owner', 'author', 'distributer', 'custodian', 'pointOfContact']
         contacts = []
+
         for role in roles:
             contact = {}
             if gemini_values.has_key(role + '-email') and gemini_values[role + '-email']: 
                 contact['email'] = gemini_values[role + '-email']
               
-        
+            if gemini_values.has_key(role + '-url') and gemini_values[role + '-url']: 
+                contact['url'] = gemini_values[role + '-url']
+    
             if gemini_values.has_key(role + '-individual-name'):  
                 if gemini_values[role + '-individual-name']:
                     contact['name'] = gemini_values[role + '-individual-name']
                 else:
                     if gemini_values.has_key(role + '-organisation-name'):
                         contact['name'] = gemini_values[role + '-organisation-name']
-                        
+                    
             if gemini_values.has_key(role + '-address') and gemini_values[role + '-address']:
                 contact['address'] = gemini_values[role + '-address']
-            
+
+
 
             if len(contact) != 0:
                 if role == 'custodian': 
-                    contact['role'] = 'ansprechpartner'  
-                                        
-                    
+                    contact['role'] = 'ansprechpartner'                     
                 if role == 'pointOfContact':
                     if gemini_values['pointOfContact-individual-name']:
                         contact['role'] = 'ansprechpartner'
                     else:
-                        contact['role'] = ' veroeffentlichende_stelle'
-                        contact['name'] = gemini_values['pointOfContact-organisation-name']
-                       
-                else:
-                    
+                        contact['role'] = 'veroeffentlichende_stelle'
+                        contact['name'] = gemini_values['pointOfContact-organisation-name']              
+                else:                 
                     if role == 'owner' or role == 'author':
-                        contact['role'] = 'autor'
-                    
-                    else:
-                        
+                        contact['role'] = 'autor'              
+                    else:                     
                         if role == 'publisher':
-                            contact['role'] = ' veroeffentlichende_stelle'
+                            contact['role'] = 'veroeffentlichende_stelle'
                             if gemini_values['pointOfContact-organisation-name']:
                                 contact['name'] = gemini_values['pointOfContact-organisation-name']
-                        else:
-                            
+                        else:                        
                             if role == 'distributer' or role == 'resourceProvider':
                                 contact['role'] = 'vertrieb'  
-                 
-                if contact not in contacts:
+                        
+                if len(contacts) > 0:
+                    contains_role = False
+                    for c in contacts:
+                        if c['role'] == contact['role']: 
+                                contains_role = True
+                                break
+                    if not contains_role:
+                        contacts.append(contact)
+                else:
                     contacts.append(contact)
-            
-        extras['contacts'] = contacts   
 
-       
+        extras['contacts'] = contacts
 
         # Construct a GeoJSON extent so ckanext-spatial can register the extent geometry
+      
         extent_string = self.extent_template.substitute(
                 minx = gemini_values['bbox-east-long'],
                 miny = gemini_values['bbox-south-lat'],
@@ -780,24 +787,36 @@ class GeminiHarvester(SpatialHarvester):
 
         extras['spatial'] = extent_string.strip()
         
+    
+
+
         if gemini_values.has_key('spatial-text'): 
             extras['spatial-text'] = gemini_values['spatial-text']
 
         extras['geographical_granularity'] = 'stadt'
         
+        
+        
+        tags2 = []
+        for key in ['keyword-inspire-theme', 'keyword-controlled-other', 'keyword-free-text']:
+            for item in gemini_values[key]:
+                if item not in tags2:
+                    tags2.append(item)
 
         # Only [a-zA-Z0-9-_] is allowed, filter every other character
         tags = []
-        for tag in gemini_values['tags']:
-            if tag != 'opendata' and tag != '#opendata_hh#':
-                tag = tag[:50] if len(tag) > 50 else tag
-                tag = re.sub('[^a-zA-Z0-9-_ ]*', '', tag)
-                tags.append({'name':tag})
-            
-        #add groups (mapped from ISO 19115 into OGD schema)      
 
-       
+        if 'opendata' in tags2 or '#opendata_hh#' in tags2:
+             for tag in tags2:
+                    if tag != 'opendata' and tag != '#opendata_hh#' and tag not in gemini_values['groups']:
+                        tag = tag[:50] if len(tag) > 50 else tag
+                        tag = unicode(tag)
+                        tags.append({'name':tag})         
+        else:
+            return None
 
+        
+        #add groups (mapped from ISO 19115 into OGD schema) 
         groups = []
         groups_in_database = Session.query(model.Group.name).filter(model.Group.state == 'active')
         
@@ -817,14 +836,59 @@ class GeminiHarvester(SpatialHarvester):
             'notes': gemini_values['abstract'],
             'tags': tags,
             'groups': groups,
-            'resources':[]
+            'resources' :[]          
         }
         
+         # extract in applications and services all given references to used datasets     
+                
+        used_datasets = []
+        if len(gemini_values['used_datasets']) > 0:
+            for uri in gemini_values['used_datasets']:
+                csw_elements = uri.split('&')
+                for element in csw_elements:
+                    if 'id' in element:
+                        used_datasets.append((element.split('='))[1]) 
+                                   
+        if len(gemini_values['coupled-resource']) > 0:
+            used_dataset_url = 'http://gateway.hamburg.de/OGCFassade/HH_CSW.aspx?Service=CSW&Request=GetRecordById&Version=2.0.2&outputSchema=http://www.isotc211.org/2005/gmd&elementSetName=full'
+            for resource in gemini_values['coupled-resource']:
+                used_datasets.append(resource['uuid'][0])
+                
+                
+        used_datasets_id = []
+        
+        
+        harvest_job = harvest_object.job
+        for dataset in used_datasets:          
+            
+            name_title = self.gen_new_name(gemini_values['title'])
+            slug = None
+            slug = self.harvest_individual_data(dataset,harvest_job)
+            
+            if not(slug is None):
+               
+                used_datasets_id.append(slug)
+
+
+        extras['sector'] = 'oeffentlich'
+
+
+        if len(used_datasets_id) > 0:
+            extras['used_datasets'] = used_datasets_id         
+        
+        
+        Session.expunge_all()
+        last_harvested_object = Session.query(HarvestObject) \
+                            .filter(HarvestObject.guid==gemini_guid) \
+                            .filter(HarvestObject.current==True) \
+
+        self.obj = harvest_object
+        self.obj.save()
         
         #set the core ckan fields maintainer and author
         if  gemini_values.has_key('pointOfContact-email'):
             package_dict['maintainer_email'] = gemini_values['pointOfContact-email']
-        
+            
         if gemini_values.has_key('pointOfContact-individual-name'):
             package_dict['maintainer'] = gemini_values['pointOfContact-individual-name']
             
@@ -845,18 +909,11 @@ class GeminiHarvester(SpatialHarvester):
             
         
         #type of the dataset 
-        if 'application' in gemini_values['resource-type'] :
+        if 'application' in gemini_values['resource-type'] or 'service' in gemini_values['resource-type'] :
             package_dict['type'] = 'app'      
         else:
-            if 'document' in gemini_values['resource-type']:
-                package_dict['type'] = 'dokument'
-        
-            else:
-                if 'dataset' in gemini_values['resource-type'] or 'nonGeographicDataset' in gemini_values['resource-type'] or 'database' in gemini_values['resource-type'] or 'series' in gemini_values['resource-type'] or 'service' in gemini_values['resource-type']:
-                    package_dict['type'] = 'datensatz'
-                else:
-                    package_dict['type'] = 'dokument'
-            
+            package_dict['type'] = 'datensatz'
+
         
         
         #set url for further information
@@ -866,9 +923,9 @@ class GeminiHarvester(SpatialHarvester):
         
         #copy license_id to ckan-core license id
         package_dict['license_id'] = extras['terms_of_use']['license_id']
-        log.debug('Set license_id to %s' %package_dict['license_id'])
+        #log.debug('Set license_id to %s' %package_dict['license_id'])
         
-        log.debug('Set groups to ' + str(package_dict['groups']))
+        #log.debug('Set groups to ' + str(package_dict['groups']))
 
         if self.obj.source.publisher_id:
             package_dict['groups'] = [{'id':self.obj.source.publisher_id}]
@@ -888,78 +945,129 @@ class GeminiHarvester(SpatialHarvester):
             package_dict['name'] = package.name
 
         resource_locators = gemini_values.get('resource-locator', [])
-
-
-        if len(resource_locators):
-            log.info("Found %s resources" %len(resource_locators))
-            for resource_locator in resource_locators:
-                url = resource_locator.get('url','')
-                
-                if url:
-                    if self._is_valid_URL(url):
-                        resource_format = ''
-                        resource = {}
-                                              
-                        #set the language of the resource 
-                        if  len(gemini_values['dataset-language'] ) > 0:  
-                            resource['language'] = gemini_values['dataset-language'][0]         
-
-                        if self._is_zib(url):
-                            resource_format = 'ZIP'
-                        else:
-                            if self._is_htm_or_html(url):
-                                continue
-                            if self._is_pdf_URI(url):
-                                resource_format = 'PDF'
-                            elif self._is_wms(url):
-                                resource['verified'] = True
-                                resource['verified_date'] = datetime.now().isoformat()
-                                resource_format = 'WMS'
-                            
-                        resource.update(
-                            {
-                                'url': url,
-                                'name': resource_locator.get('name',''),
-                                'description': resource_locator.get('description') if resource_locator.get('description') else 'Resource locator',
-                                'format': resource_format or None,
-                                'resource_locator_protocol': resource_locator.get('protocol',''),
-                                'resource_locator_function':resource_locator.get('function','')
-    
-                            })
-                        package_dict['resources'].append(resource)
-                        
-                        resource_locators = gemini_values.get('resource-locator', [])
-
         service_locators = gemini_values.get('service-locator', [])
         
+        # extract found services from resources and put them to the services
+        result_set = self.find_services_in_resources(service_locators, resource_locators)
+        resource_locators = result_set ['resources'] 
+        service_locators = result_set['services']
+        
+        # get all formats from the inspire file
+        formats = []
+        formats = self.get_data_format_from_inspire(gemini_values['data-format'] )
+        used_formats = []
+        contains_wfs = False
+        format_is_set = False
+        
+        
         if len(service_locators):
-            log.info("Found %s service points" % len(resource_locators))
+            #log.info("Found %s service points" % len(resource_locators))
             for service_locator in service_locators:
                 url = service_locator.get('url', '')
                 if url:
                     if self._is_valid_URL(url):
                         service_format = ''
                         resource = {}
-                        if self._is_wms(url):
-                            resource['verified'] = True
-                            resource['verified_date'] = datetime.now().isoformat()
-                            service_format = 'WMS'
-                        elif self._is_probably_wms(url):
-                            # check if wms is alive
-                            service_format = 'WMS'
-                        else:
-                            log.info('Invalid WMS Service!')
+                        
+                        service_des = service_locator.get('description')
+                        service_format = None
+                        if service_des:                          
+                            if 'Format:' in service_des:
+                                    format_is_set = True
+                                    for service in self.service_formats:
+                                        if service_des in resource:
+                                            service_format = resource
+                            else:      
+                                service_format = self.get_service_name_from_url(url)
+                        else:      
+                            service_format = self.get_service_name_from_url(url)
+                        
+                        resource['verified'] = True
+                        
+                        if service_format == 'WFS':
+                            contains_wfs = True
+                        
                         resource.update(
                             {
                                 'url': url,
                                 'name': service_locator.get('name',''),
-                                'description': service_locator.get('description') if service_locator.get('description') else 'Resource locator',
-                                'format': service_format or None,
+                                'description':  service_locator.get('description') if service_locator.get('description') else 'Ressource',
+                                'format':service_format or None,
+                                'type' : 'api',
                                 'resource_locator_protocol': service_locator.get('protocol',''),
                                 'resource_locator_function':service_locator.get('function','')
     
                             })
-                        package_dict['resources'].append(resource)    
+                        
+                        if not self.is_similar_url_in_services(url, service_locators) and not self.is_url_in_services(url, package_dict['resources']) and resource not in package_dict['resources']: 
+                            package_dict['resources'].append(resource)
+                            
+                           
+        if not format_is_set:
+            package_dict['resources'] = self.match_service_format(package_dict['resources'], formats, used_formats, contains_wfs)
+        
+        
+        format_is_set = False
+        if len(resource_locators):
+            
+            #log.info("Found %s resources" %len(resource_locators))
+            for resource_locator in resource_locators:
+                url = resource_locator.get('url','')                
+                if url:
+                    if self._is_valid_URL(url):
+                        resource_format = ''
+                        resource = {}
+                           
+                        #set the language of the resource 
+                        if  len(gemini_values['dataset-language'] ) > 0:  
+                            resource['language'] = gemini_values['dataset-language'][0]         
+                        
+                        resource_format = ''
+                        resource_des = resource_locator.get('description')
+                        if resource_des:
+                            if 'Format:' in resource_des:
+                                    format_is_set = True
+                                    for resource in self.resource_formats:
+                                        if resource_des in resource:
+                                            resource_format = resource
+                            else:       
+                                resource_format = self.get_data_format_from_url(url)   
+                        else:
+                            resource_format = self.get_data_format_from_url(url)    
+                        
+                         
+                        resource.update(
+                            {
+                                'url': url,
+                                'name': resource_locator.get('name',''),
+                                'description': resource_locator.get('description') if resource_locator.get('description') else 'Ressource',
+                                'format': resource_format or None,
+                                'type' : 'file',
+                                'resource_locator_protocol': resource_locator.get('protocol',''),
+                                'resource_locator_function':resource_locator.get('function','')
+    
+                            })
+                        package_dict['resources'].append(resource)  
+            
+        if not format_is_set:                   
+            package_dict['resources'] = self.match_resource_format(package_dict['resources'], formats, used_formats)
+
+            
+
+            # Guess the best view service to use in WMS preview
+            verified_view_resources = [r for r in package_dict['resources'] if 'verified' in r and r['format'] == 'WMS']
+            if len(verified_view_resources):
+                verified_view_resources[0]['ckan_recommended_wms_preview'] = True
+            else:
+                view_resources = [r for r in package_dict['resources'] if r['format'] == 'WMS']
+                if len(view_resources):
+                    view_resources[0]['ckan_recommended_wms_preview'] = True
+                    
+       
+       
+       
+       
+       
 
             # Guess the best view service to use in WMS preview
             verified_view_resources = [r for r in package_dict['resources'] if 'verified' in r and r['format'] == 'WMS']
@@ -983,6 +1091,7 @@ class GeminiHarvester(SpatialHarvester):
         
         extras['ogd_version'] = OGPDHarvester.version
         
+        extras['sector'] = 'oeffentlich'
         
 
         extras_as_dict = []
@@ -993,9 +1102,6 @@ class GeminiHarvester(SpatialHarvester):
                 extras_as_dict.append({'key':key,'value':json.dumps(value, ensure_ascii = False)})
     
         package_dict['extras'] = extras_as_dict
-
-
-        
 
 
         if not package_dict['resources']:
@@ -1009,11 +1115,43 @@ class GeminiHarvester(SpatialHarvester):
             if package == None:
                 # Create new package from data.
                 package = self._create_package_from_data(package_dict)
-                log.info('Created new package ID %s with GEMINI guid %s', package['id'], gemini_guid)
+                #log.info('Created new package ID %s with GEMINI guid %s', package['id'], gemini_guid)
             else:
                 package = self._create_package_from_data(package_dict, package = package)
-                log.info('Updated existing package ID %s with existing GEMINI guid %s', package['id'], gemini_guid)
+                #log.info('Updated existing package ID %s with existing GEMINI guid %s', package['id'], gemini_guid)
     
+            # add relationships between datasets
+            
+            
+            theparent = model.Package.by_name(name=package_dict['name'])
+            for d in used_datasets_id:
+                thechild = model.Package.by_name(name=d)
+                rev = model.repo.new_revision()
+                theparent.add_relationship(u'links_to', thechild, u'basisdaten')
+                r = thechild.relationships_as_subject
+                model.repo.commit_and_remove()
+   
+
+            for slug in used_datasets_id:
+               
+                url = ''
+                like_q = u'%s%%' % slug
+                pkg_query = Session.query(Package).filter(Package.name.ilike(like_q))
+                for pkg in pkg_query:
+                    if pkg.name == slug:
+                        url = pkg.url
+                        break
+                
+                related_dict = {
+                    'title': 'basisdaten',
+                    'type': 'Idea',
+                    'dataset_id ': package['id'],
+                    'url' : url           
+                }
+                
+                result = self._create_related_item(related_dict)
+                
+
             # Flag the other objects of this source as not current anymore
             from ckanext.harvest.model import harvest_object_table
             u = update(harvest_object_table) \
@@ -1021,27 +1159,333 @@ class GeminiHarvester(SpatialHarvester):
                     .values(current=False)
             Session.execute(u, params={'b_package_id':package['id']})
             Session.commit()
-    
+            
             # Refresh current object from session, otherwise the
-            # import paster command fails
+            # import paster command fails    
             Session.remove()
             Session.add(self.obj)
             Session.refresh(self.obj)
-    
+
             # Set reference to package in the HarvestObject and flag it as
             # the current one
             if not self.obj.package_id:
                 self.obj.package_id = package['id']
-    
+            
+            
+            if not self.obj.package:
+                self.obj.package = package
+            
+            
             self.obj.current = True
             self.obj.save()
     
-    
-            #assert gemini_guid == [e['value'] for e in package['extras'] if e['key'] == 'guid'][0]
-            #assert self.obj.id == [e['value'] for e in package['extras'] if e['key'] == 'harvest_object_id'][0]
-    
+            #print 'End : ############################################################################################'
+
             return package
+       
+
+
+
+   
+    def _is_valid_URL(self,url):
+        '''
+        This method checks whether the given url has a 
+        valid url scheme and a valid netloc 
+        '''
         
+        url_schema = urlparse(url)
+        if url_schema.netloc and url_schema.scheme:
+            return True
+        return False
+    
+    
+    def is_url_in_services(self, first_url, services):
+        '''
+        This method checks whether the given url is already in the list of services.
+        '''
+        first_url_schema = urlparse(first_url)  
+        
+        if len(services):
+            for service in services:
+                second_url = service['url']        
+                second_url_schema = urlparse(second_url)
+                
+                first_query = first_url_schema.query.split('&')
+                second_query = second_url_schema.query.split('&')
+                
+                # service requests which differ in their order of parameteres in its query were extracted 
+                if set(second_query) == set(first_query) and first_url_schema.scheme == second_url_schema.scheme and first_url_schema.path == second_url_schema.path:
+                    return True
+                
+                return False
+    
+    def is_similar_url_in_services(self,url,services):
+        '''
+        This method checks whether a similar version of a url is 
+        already presented in the list of services.
+        '''
+        url_schema = urlparse(url)
+        if len(services):
+            for service in services:
+                current_url = service.get('url', '')
+                if current_url != url:
+                    current_url_schema = urlparse(current_url)
+        
+                    if current_url_schema.path == url_schema.path and not url_schema.query or url_schema.query.startswith('version='):
+                        return True
+        return False
+  
+    def find_services_in_resources(self,services, resources):
+        '''
+        This method extracts all services which were defined in the inspire resource field
+        and puts them to right list.
+        '''
+        result = {}
+        found_services = []
+        if len(resources):
+            for resource in resources:
+                url = resource.get('url','') 
+                if 'SERVICE=' in url.upper():
+                    found_services.append(resource)
+                    #services.append(resource) 
+                    #resources.remove(resource)
+                    
+        for service in found_services:
+            services.append(service) 
+            resources.remove(service)
+            
+        result['resources'] = resources
+        result['services'] = services
+        return result
+        
+  
+    def match_service_format(self, services, formats, used_formats, contains_wfs):
+        '''
+        This method searchs for each service a suitable format from the format list
+        which is extracted from the inspire document.
+        '''
+        for service in services:
+            if service['format']:
+                if 'WFS' in service['format']:
+                    if 'GML' in formats or 'GML' in used_formats:
+                        service['format'] = self.validate_resource('GML')
+                        try:
+                            formats.remove('GML')
+                        except:
+                            print 'GML'
+                        used_formats.append('GML')
+                elif 'WMS' in service['format'] and 'GML' in formats and not contains_wfs:
+                    service['format'] = self.validate_resource('GML')
+                    formats.remove('GML')
+                    used_formats.append('GML')
+            elif 'GML' in formats:
+                service['format'] = self.validate_resource('GML')
+                formats.remove('GML')
+                used_formats.append('GML')
+            
+        return services
+            
+  
+    def validate_resource(self,resource_format):
+        '''
+        Returns the given resource if the format list contains the format 
+        of the resource. Otherwise it returns an empty string.
+        '''
+        if resource_format in self.resource_formats or resource_format in self.service_formats:
+            return resource_format 
+        return ''
+    
+  
+    def match_resource_format(self, resources, formats, used_formats):
+        '''
+        This method searchs for each resource a suitable format from the format list
+        which is extracted from the inspire document.
+        '''
+        import copy
+        found_formats = []
+        for resource in resources:
+            if resource['format'] in formats:
+                found_formats.append(resource['format'])
+        
+        for f in found_formats:
+            try:
+                formats.remove(f)
+                used_formats.append(f)
+            except:
+                print f
+        
+        copied_resources = []
+        if len(formats)>0:
+                for f in formats:
+                    if 'TIF' in f:
+                        for resource in resources:
+                            if resource['format']:
+                                if resource['format'] == 'JPEG':
+                                    resource_copy = copy.deepcopy(resource)
+                                    resource_copy['format'] = 'TIFF'
+                                    copied_resources.append(resource_copy)
+                                    resource['format'] = self.validate_resource('TIF')
+                           
+                    else:                    
+                        for resource in resources:
+                            if resource['format']:              
+                                if 'ZIP' in resource['format'] or 'WEB' in resource['format'] or 'HTML' in resource['format']:
+                                    resource['format'] = self.validate_resource(f)
+                            else:
+                                resource['format'] = self.validate_resource(f)
+                                    
+                            
+        for resource in copied_resources:
+                    resources.append(resource) 
+                   
+        return resources 
+  
+    def get_service_name_from_url(self, url):
+        '''
+         This method tries to find the service name.
+        '''
+        import string 
+        service = None
+        
+        url_upper = string.upper(url)
+        if 'SERVICE=WFS' in url_upper:
+            service = 'WFS'
+        elif 'SERVICE=WMS' in url_upper:
+            service = 'WMS' 
+        elif 'WMSSERVER' in url_upper:
+            service = 'WMS'
+        elif url.endswith('.zip'):
+            service = 'ZIP'
+
+        if service:
+            return self.validate_resource(service)
+        
+        return None
+  
+    def get_data_format_from_inspire(self, data_formats):
+        '''
+         This method tries to relate all formats in the inspire document to a suitable mime type.
+        '''
+        formats = []
+        for f in data_formats:
+            if f['name'].isupper():
+                formats.append(f['name'])
+            else:
+                if 'GML' in f['name']:
+                    formats.append('GML')
+        return formats
+    
+    
+    def get_data_format_from_url(self, url):
+        '''
+        This method assigns a mime type to the given url according to its name.
+        '''
+        resource = ''
+
+        if 'ascii' in url:
+            resource = 'ASCII'
+        elif 'excel' in url:
+            resource ='XLS'
+        elif url.endswith(".pdf"):
+            resource = 'PDF'
+        elif url.endswith(".zip"):
+            resource = 'ZIP'
+        elif url.endswith('.htm') or url.endswith('.html') or '.htm' in url or '.html' in url:
+            resource = 'HTML'
+        elif url.endswith('.jpg'):
+            resource = 'JPEG'
+        elif url.endswith('.xls'):
+            resource = 'XLS'
+        elif url.endswith('.txt'):
+            resource = 'TXT'
+        else:
+            resource = 'WEB'
+        
+        return self.validate_resource(resource)
+   
+
+
+    def harvest_individual_data(self,id,harvest_job):               
+        
+        #log.debug('RELATIONSHIP_REQUEST: %s', id)
+    
+        if id in self.related_data_ids:
+                
+                return None  
+
+        harvested_object = Session.query(HarvestObject) \
+                    .filter(HarvestObject.guid==id) \
+                    .all()
+
+        if len(harvested_object) > 0:             
+            obj = harvested_object[0]
+            self.obj = obj 
+            self.obj.save() 
+        
+            try:
+                    Session.expunge_all()
+                    Session.add(self.obj)
+                    Session.refresh(self.obj)
+            except:
+                Session.merge(self.obj)
+                #log.debug('error occurend while updating the session')
+
+            
+            if obj.package:
+                packages = Session.query(model.Package.name).autoflush(False).filter_by(name=obj.package.name)
+                result = packages.first()
+                
+                if result:
+                    return result[0]       
+                else:
+                    package = self.write_package_from_inspire_string(obj.content, obj)
+        
+                    if package is None:
+                        return None
+                    else:                    
+                        return package['name']     
+                    
+            else:     
+                package = self.write_package_from_inspire_string(obj.content, obj)
+    
+                if package is None:
+                    return None
+                else:
+                    return package['name']    
+ 
+        else:       
+     
+            #csw = CswService('http://hmdk.de/csw')
+            csw = CswService('http://gateway.hamburg.de/OGCFassade/HH_CSW.aspx')
+            data = csw.getrecordbyid([id])
+            
+            if data is None:
+                return None
+            else:
+                obj = HarvestObject(guid = id, job = harvest_job)
+                content = data['xml']
+                obj.content = content
+                obj.save()
+    
+                self.obj = obj  
+                self.obj.save()
+                
+                try:
+                        Session.expunge_all()
+                        Session.add(self.obj)
+                        Session.refresh(self.obj)
+                except:
+                        Session.merge(self.obj)
+                        #log.debug('error occurend while updating the session')
+            
+
+                package = self.write_package_from_inspire_string(obj.content, obj)
+            
+                if package is None:
+                     return None
+                else:
+                    return package['name']   
+            
     
     
     def get_dates(self, dates, role):
@@ -1059,6 +1503,7 @@ class GeminiHarvester(SpatialHarvester):
         return result
 
       
+      
              
     def get_datetime(self,dt):
         
@@ -1073,18 +1518,12 @@ class GeminiHarvester(SpatialHarvester):
             midnight = datetime.time(0)
             return (datetime.datetime.combine(d.date(), midnight)).isoformat()
     
-       
-    def _is_valid_URL(self,url):
-        try:
-            urllib2.urlopen(url)
-            return True
-        except:
-            return False 
+    
     
     
     def translate_group(self, group):
         
-        map = {u'Bevörung'                                  : 'bevoelkerung',
+        map = {u'Bevörung'                                     : 'bevoelkerung',
                 'Bildung und Wissenschaft'                     : 'bildung-wissenschaft',
                 'Geographie, Geologie und Geobasisdaten'       : 'geo',
                 'Gesetze und Justiz'                           : 'gesetze-justiz',
@@ -1096,7 +1535,7 @@ class GeminiHarvester(SpatialHarvester):
                 'Transport und Verkehr'                        : 'transport-verkehr',
                 'Umwelt und Klima'                             : 'umwelt-klima',
                 'Verbraucherschutz'                            : 'verbraucherschutz',
-               u'Öfentliche Verwaltung, Haushalt und Steuern' : 'verwaltung',
+               u'Öfentliche Verwaltung, Haushalt und Steuern'  : 'verwaltung',
                 'Wirtschaft und Arbeit'                        : 'wirtschaft-arbeit'
               }
   
@@ -1110,6 +1549,7 @@ class GeminiHarvester(SpatialHarvester):
                 if 'lkerung' in group:
                     out = 'bevoelkerung' 
         return out
+    
     
     
     def _create_group(self, group_name):
@@ -1153,6 +1593,12 @@ class GeminiHarvester(SpatialHarvester):
             
         return package 
         
+    def get_future_name(self,title):   
+        name = munge_title_to_name(title).replace('_', '-')
+        while '--' in name:
+            name = name.replace('--', '-')
+        return name
+
         
     def gen_new_name(self, title):
         name = munge_title_to_name(title).replace('_', '-')
@@ -1177,6 +1623,29 @@ class GeminiHarvester(SpatialHarvester):
             if o.scheme and o.netloc:
                 return licence
         return None
+    
+    
+    
+    def _create_related_item(self, related_dict):
+        
+        context = {'model':model,
+                   'session':Session,
+                   'user':'harvest',
+                   #'schema':package_schema,
+                   'extras_as_string':True,
+                   'api_version': '2'}
+        
+
+        try:
+            action_function = get_action('related_create')      
+            related_dict = action_function(context, related_dict)
+        except ValidationError,e:
+            raise Exception('Validation Error: %s' % str(e.error_summary))
+            if debug_exception_mode:
+                raise
+
+        return related_dict
+    
 
     def _create_package_from_data(self, package_dict, package = None):
         '''
@@ -1282,8 +1751,8 @@ class GeminiCswHarvester(GeminiHarvester, SingletonPlugin):
             }
 
     def gather_stage(self, harvest_job):
-        log = logging.getLogger(__name__ + '.CSW.gather')
-        log.debug('GeminiCswHarvester gather_stage for job: %r', harvest_job)
+        #log = logging.getLogger(__name__ + '.CSW.gather')
+        #log.debug('GeminiCswHarvester gather_stage for job: %r', harvest_job)
         # Get source URL
         url = harvest_job.source.url
 
@@ -1294,13 +1763,13 @@ class GeminiCswHarvester(GeminiHarvester, SingletonPlugin):
             return None
 
 
-        log.debug('Starting gathering for %s' % url)
+        #log.debug('Starting gathering for %s' % url)
         used_identifiers = []
         ids = []
         try:
             for identifier in self.csw.getidentifiers(page=10):
                 try:
-                    log.info('Got identifier %s from the CSW', identifier)
+                    #log.info('Got identifier %s from the CSW', identifier)
                     if identifier in used_identifiers:
                         log.error('CSW identifier %r already used, skipping...' % identifier)
                         continue
@@ -1330,8 +1799,8 @@ class GeminiCswHarvester(GeminiHarvester, SingletonPlugin):
         return ids
 
     def fetch_stage(self,harvest_object):
-        log = logging.getLogger(__name__ + '.CSW.fetch')
-        log.debug('GeminiCswHarvester fetch_stage for object: %r', harvest_object)
+        #log = logging.getLogger(__name__ + '.CSW.fetch')
+        #log.debug('GeminiCswHarvester fetch_stage for object: %r', harvest_object)
 
         url = harvest_object.source.url
         try:
@@ -1362,7 +1831,7 @@ class GeminiCswHarvester(GeminiHarvester, SingletonPlugin):
                                     (identifier, e), harvest_object)
             return False
 
-        log.debug('XML content saved (len %s)', len(record['xml']))
+        #log.debug('XML content saved (len %s)', len(record['xml']))
         return True
 
     def _setup_csw_client(self, url):
@@ -1384,8 +1853,8 @@ class GeminiDocHarvester(GeminiHarvester, SingletonPlugin):
             }
 
     def gather_stage(self,harvest_job):
-        log = logging.getLogger(__name__ + '.individual.gather')
-        log.debug('GeminiDocHarvester gather_stage for job: %r', harvest_job)
+        #log = logging.getLogger(__name__ + '.individual.gather')
+        #log.debug('GeminiDocHarvester gather_stage for job: %r', harvest_job)
 
         self.harvest_job = harvest_job
 
@@ -1412,7 +1881,7 @@ class GeminiDocHarvester(GeminiHarvester, SingletonPlugin):
                                     content=gemini_string)
                 obj.save()
 
-                log.info('Got GUID %s' % gemini_guid)
+                #log.info('Got GUID %s' % gemini_guid)
                 return [obj.id]
             else:
                 self._save_gather_error('Could not get the GUID for source %s' % url, harvest_job)
@@ -1445,8 +1914,8 @@ class GeminiWafHarvester(GeminiHarvester, SingletonPlugin):
             }
 
     def gather_stage(self,harvest_job):
-        log = logging.getLogger(__name__ + '.WAF.gather')
-        log.debug('GeminiWafHarvester gather_stage for job: %r', harvest_job)
+        #log = logging.getLogger(__name__ + '.WAF.gather')
+        #log.debug('GeminiWafHarvester gather_stage for job: %r', harvest_job)
 
         self.harvest_job = harvest_job
 
@@ -1475,7 +1944,7 @@ class GeminiWafHarvester(GeminiHarvester, SingletonPlugin):
                     try:
                         gemini_string, gemini_guid = self.get_gemini_string_and_guid(content,url)
                         if gemini_guid:
-                            log.debug('Got GUID %s' % gemini_guid)
+                            #log.debug('Got GUID %s' % gemini_guid)
                             # Create a new HarvestObject for this identifier
                             # Generally the content will be set in the fetch stage, but as we alredy
                             # have it, we might as well save a request
@@ -1547,7 +2016,37 @@ class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
     '''
     implements(IHarvester)
     
+    job = None
+    related_data_ids=[]
     version = 'v1.0'
+    resource_formats = ['BMP',
+                        'ASCII',
+                        'XML',
+                        'XLS',
+                        'TXT',
+                        'TIF',
+                        'DATA',
+                        'SHP',
+                        'PDF',
+                        'MDB',
+                        'JPEG',
+                        'HTML',
+                        'GML',
+                        'ZIP',
+                        'GIF',
+                        'DOC',
+                        'CSV'
+                        ]
+    
+    service_formats = [
+                       'WINDOWS',
+                       'WEB',
+                       'IOS',
+                       'ANDROID',
+                       'WMS',
+                       'WFS',
+                       'ANDERE PLATTFORM'
+                       ]
     
     def info(self):
         return {
@@ -1558,10 +2057,11 @@ class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
 
     
     def gather_stage(self,harvest_job):
-        log.debug('In OGPDHarvester gather_stage')
+        #log.debug('In OGPDHarvester gather_stage')
         # Get source URL
         url = harvest_job.source.url
-
+        self.job = harvest_job 
+        
         # Setup CSW client
         try:
             self._setup_csw_client(url)
@@ -1570,14 +2070,14 @@ class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
             return None
 
 
-        log.debug('Starting gathering for %s ' % url)
+        #log.debug('Starting gathering for %s ' % url)
         used_identifiers = []
         ids = []
         try:
             for record in self.csw.getidentifiers(keywords=['#opendata_hh#'], page=10):
                 try:
                     identifier = record['identifier']
-                    log.info('Got identifier %s from the CSW', identifier)
+                    #log.info('Got identifier %s from the CSW', identifier)
                     if identifier in used_identifiers:
                         log.error('CSW identifier %r already used, skipping...' % identifier)
                         continue
@@ -1617,9 +2117,9 @@ class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
     def import_stage(self, harvest_object):
         '''Import stage of the OGPD Harvester'''
 
-        log = logging.getLogger(__name__ + '.import')
+        #log = logging.getLogger(__name__ + '.import')
         #log.debug('Import stage for harvest object: %r', harvest_object)
-        log.debug('Import stage for harvest object')
+        #log.debug('Import stage for harvest object')
 
         if not harvest_object:
             log.error('No harvest object received')
