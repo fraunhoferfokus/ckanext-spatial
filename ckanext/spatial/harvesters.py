@@ -909,7 +909,7 @@ class GeminiHarvester(SpatialHarvester):
             
         
         #type of the dataset 
-        if 'application' in gemini_values['resource-type'] or 'service' in gemini_values['resource-type'] :
+        if 'application' in gemini_values['resource-type']:
             package_dict['type'] = 'app'      
         else:
             package_dict['type'] = 'datensatz'
