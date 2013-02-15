@@ -1791,8 +1791,6 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
         else:
             raise Exception('Neither author nor maintainer is set')
 
-        log.info("---------------- ACHTUNG ---------------")
-        log.info(extras['contacts'][1])
         package_dict['author_email'] = extras['contacts'][1]['email']
 
     '''
