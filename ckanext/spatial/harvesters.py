@@ -922,7 +922,7 @@ class GeminiHarvester(SpatialHarvester):
         else:
             package_dict['maintainer'] = ''
 
-        self.copy_author_to_maintainer(package_dict)
+        self.copy_author_to_maintainer(package_dict, extras)
         log.debug('Set author to %s' %package_dict['author'])
         log.debug('Set maintainer to %s' %package_dict['maintainer'])
         log.debug('Set license_id to %s' %package_dict['license_id'])
@@ -1637,13 +1637,13 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
         import shutil
 
         # remove old dir from previous harvest run
-        if(os.path.exists(tmpdir+self.temp_directory)):
-            shutil.rmtree(tmpdir+self.temp_directory)
-        if(os.path.exists(tmpdir+'/file_destatis.zip')):
-            os.remove(tmpdir+'/file_destatis.zip')
+        if(os.path.exists(tmpdir + self.temp_directory)):
+            shutil.rmtree(tmpdir + self.temp_directory)
+        if(os.path.exists(tmpdir + '/file_destatis.zip')):
+            os.remove(tmpdir + '/file_destatis.zip')
         try:
             req = urllib2.urlopen(url)
-            local_file=open(tmpdir+"/file_destatis.zip", "wb")
+            local_file = open(tmpdir + "/file_destatis.zip", "wb")
             while 1:
                 packet = req.read()
                 if not packet:
@@ -1652,7 +1652,7 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
             req.close()
             local_file.close()
         except Exception, e:
-            print "error"
+            log.error("Writing from URL to the packet failed: %s" % str(e))
             return None
         finally:
             req.close()
@@ -1775,16 +1775,25 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
 
     def handle_licenses(self, gemini_values):
         # add cc-by to gemini other constraints
-        gemini_values['other-constraints'].append('CC-BY 3.0')
+        gemini_values['other-constraints'].append('Datenlizenz Deutschland Namensnennung')
         return licenses.translate_license_data(gemini_values)
 
     '''
     This method copies the author to maintainer. Thoses changes are made
     to package_dict directly. This is only valid for destatis
     '''
-    def copy_author_to_maintainer(self,package_dict):
-        if not package_dict['maintainer']:
+    def copy_author_to_maintainer(self, package_dict, extras):
+
+        if not package_dict['author']:
+            package_dict['author'] = package_dict['maintainer']
+        elif not package_dict['maintainer']:
             package_dict['maintainer'] = package_dict['author']
+        else:
+            raise Exception('Neither author nor maintainer is set')
+
+        log.info("---------------- ACHTUNG ---------------")
+        log.info(extras['contacts'][1])
+        package_dict['author_email'] = extras['contacts'][1]['email']
 
     '''
     This method copies the metadata_original_id to url. Thoses changes are made

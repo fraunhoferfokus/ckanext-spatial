@@ -41,18 +41,20 @@ def translate_license_data(gemini):
                             'otherRestrictions':            u'andere Beschränkung'}
 
         # License adjustments based on knowledge gathered through data mining
-        constraint_translation = {'CC-BY 3.0':           'cc-by',
-                                  'keine Angaben':        None,
-                                  'conditions unknown':   None,
-                                  'Keine':               'cc-zero',
-                                  'none':                'cc-zero',
-                                  'free':                'cc-zero',
-                                  'keine':               'cc-zero',
-                                  'no conditions apply': 'cc-zero'}
+        constraint_translation = {'CC-BY 3.0':                             'cc-by',
+                                  'keine Angaben':                         None,
+                                  'conditions unknown':                    None,
+                                  'Keine':                                 'cc-zero',
+                                  'none':                                  'cc-zero',
+                                  'free':                                  'cc-zero',
+                                  'keine':                                 'cc-zero',
+                                  'no conditions apply':                   'cc-zero',
+                                  'Datenlizenz Deutschland Namensnennung': 'dl-de-by-1.0'}
 
         # Dictionary to map license IDs to their URLs
-        urls = {'cc-by':   'http://creativecommons.org/license/by/3.0/de',
-                'cc-zero': 'http://creativecommons.org/publicdomain/zero/1.0/deed.de'}
+        urls = {'cc-by':        'http://creativecommons.org/license/by/3.0/de',
+                'cc-zero':      'http://creativecommons.org/publicdomain/zero/1.0/deed.de',
+                'dl-de-by-1.0': 'http://www.daten-deutschland.de/bibliothek/Datenlizenz_Deutschland/dl-de-by-1.0'}
 
         # Sum up the use limitations and use constraints in the 'other'
         # field of the terms of use
