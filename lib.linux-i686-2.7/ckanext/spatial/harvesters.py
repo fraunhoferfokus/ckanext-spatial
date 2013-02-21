@@ -909,7 +909,7 @@ class GeminiHarvester(SpatialHarvester):
             
         
         #type of the dataset 
-        if 'application' in gemini_values['resource-type']:
+        if 'application' in gemini_values['resource-type'] or 'service' in gemini_values['resource-type'] :
             package_dict['type'] = 'app'      
         else:
             package_dict['type'] = 'datensatz'
@@ -971,12 +971,12 @@ class GeminiHarvester(SpatialHarvester):
                         
                         service_des = service_locator.get('description')
                         service_format = None
-                        if service_des:                          
+                        if service_des:                           
                             if 'Format:' in service_des:
                                     format_is_set = True
                                     for service in self.service_formats:
-                                        if service_des in resource:
-                                            service_format = resource
+                                        if service in service_des.upper():
+                                            service_format = service
                             else:      
                                 service_format = self.get_service_name_from_url(url)
                         else:      
@@ -1028,7 +1028,7 @@ class GeminiHarvester(SpatialHarvester):
                             if 'Format:' in resource_des:
                                     format_is_set = True
                                     for resource in self.resource_formats:
-                                        if resource_des in resource:
+                                        if resource in resource_des.upper():
                                             resource_format = resource
                             else:       
                                 resource_format = self.get_data_format_from_url(url)   
@@ -1517,6 +1517,7 @@ class GeminiHarvester(SpatialHarvester):
             d = datetime.datetime.strptime( dt, "%Y-%m-%d")       
             midnight = datetime.time(0)
             return (datetime.datetime.combine(d.date(), midnight)).isoformat()
+    
     
     
     
@@ -2019,34 +2020,8 @@ class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
     job = None
     related_data_ids=[]
     version = 'v1.0'
-    resource_formats = ['BMP',
-                        'ASCII',
-                        'XML',
-                        'XLS',
-                        'TXT',
-                        'TIF',
-                        'DATA',
-                        'SHP',
-                        'PDF',
-                        'MDB',
-                        'JPEG',
-                        'HTML',
-                        'GML',
-                        'ZIP',
-                        'GIF',
-                        'DOC',
-                        'CSV'
-                        ]
-    
-    service_formats = [
-                       'WINDOWS',
-                       'WEB',
-                       'IOS',
-                       'ANDROID',
-                       'WMS',
-                       'WFS',
-                       'ANDERE PLATTFORM'
-                       ]
+    resource_formats = [] 
+    service_formats = []
     
     def info(self):
         return {
@@ -2055,6 +2030,26 @@ class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
             'description': 'Harvester for CSW Servers like GDI Geodatenkatalog'
             }
 
+    
+    def read_formats(self):
+            
+        import json
+        
+        try:
+            dataset_formats = open('formats/dataset_formats.json', 'r')
+            self.resource_formats = json.loads(dataset_formats.read())
+            dataset_formats.close()
+        except Exception, e:
+            log.error('Error occurred while reading dataset formats: %r' %e)
+            
+        try:  
+            app_formats = open('formats/application_formats.json', 'r')
+            self.service_formats = json.loads(app_formats.read())
+            app_formats.close()
+        
+        except Exception, e:
+            log.error('Error occurred while reading application formats %r' %e)
+    
     
     def gather_stage(self,harvest_job):
         #log.debug('In OGPDHarvester gather_stage')
@@ -2125,6 +2120,8 @@ class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
             log.error('No harvest object received')
             return False
 
+        self.read_formats()
+        
         # Save a reference
         self.obj = harvest_object
 
