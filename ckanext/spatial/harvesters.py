@@ -937,15 +937,6 @@ class GeminiHarvester(SpatialHarvester):
         if reactivate_package:
             package_dict['state'] = u'active'
 
-        if package is None or package.title != gemini_values['title']:
-            name = self.gen_new_name(gemini_values['title'])
-            if not name:
-                name = self.gen_new_name(str(gemini_guid))
-            if not name:
-                raise Exception('Could not generate a unique name from the title or the GUID. Please choose a more unique title.')
-            package_dict['name'] = name
-        else:
-            package_dict['name'] = package.name
 
         resource_locators = gemini_values.get('resource-locator', [])
         resources = self.handle_resources(resource_locators)
@@ -975,12 +966,30 @@ class GeminiHarvester(SpatialHarvester):
             if len(view_resources):
                 view_resources[0]['ckan_recommended_wms_preview'] = True
 
+        if package is None or package.title != gemini_values['title']:
+            if 'destatis' in harvest_object.source.url:
+                table_id = ''
+                m = re.search('tabelleDownload/(\d+-\d+).', package_dict['resources'][0]['url'])
+                if m:
+                    table_id = m.group(1)
+        
+                name = 'destatis-dataset-'+table_id
+            else:
+                name = self.gen_new_name(gemini_values['title'])
+            if not name:
+                name = self.gen_new_name(str(gemini_guid))
+            if not name:
+                raise Exception('Could not generate a unique name from the title or the GUID. Please choose a more unique title.')
+            package_dict['name'] = name
+        else:
+            package_dict['name'] = package.name
+
         extras_as_dict = []
         for key,value in extras.iteritems():
             if isinstance(value,(basestring,Number)):
-               extras_as_dict.append({'key':key,'value':value})
+                extras_as_dict.append({'key':key,'value':value})
             else:
-               extras_as_dict.append({'key':key,'value':json.dumps(value, ensure_ascii = False)})
+                extras_as_dict.append({'key':key,'value':json.dumps(value, ensure_ascii = False)})
 
         package_dict['extras'] = extras_as_dict
 
@@ -1780,19 +1789,27 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
                             url = url.replace('tabelleErgebnis','tabelleDownload')[:-5] + '.xls'
                             resource_format = 'XLS'
                         else:
-                            url = url.replace('tabelleErgebnis','tabelleDownload')[:-4] + '.xls'
+                            url = url.replace('tabelleErgebnis','tabelleDownload') + '.xls'
                             resource_format = 'XLS'
-                    resource.update(
-                        {
-                            'url': url,
-                            'name': resource_format + ' - Ressource',
-                            'description': resource_format + ' - Ressource',
-                            'format': resource_format or None,
-                            'resource_locator_protocol': resource_locator.get('protocol',''),
-                            'resource_locator_function':resource_locator.get('function','')
-
-                        })
-                    result.append(resource)
+                    elif 'tabelleDownload' in url:
+                        if url.endswith('.xml'):
+                            resource_format = 'XML'
+                    if resource_format:
+                        resource.update(
+                            {
+                                'url': url,
+                                'name': resource_format + ' - Ressource',
+                                'description': resource_format + ' - Ressource',
+                                'format': resource_format or None,
+                                'resource_locator_protocol': resource_locator.get('protocol',''),
+                                'resource_locator_function':resource_locator.get('function','')
+    
+                            })
+                        result.append(resource)
+                    else:
+                        log.info("Weird Resource, write URL to file")
+                        with open('Failed.txt', 'a') as f:
+                            f.write("Weird Resource: %s\n" %url)
         return result
 
     def handle_licenses(self, gemini_values):
