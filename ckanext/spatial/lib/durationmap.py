@@ -47,21 +47,25 @@ class DurationTranslator:
                     duration = 'jahr'
                     temp_factor = duration_factors['years']  
             else:            
-                if duration_factors['days'] > 0:
-                    duration = 'tag'
-                    temp_factor = duration_factors['days']  
+                if duration_factors['months'] > 0:
+                    duration = 'monat'
+                    temp_factor = duration_factors['months']  
                 else:            
-                    if  duration_factors['hours'] > 0:
-                        duration = 'stunde'
-                        temp_factor = duration_factors['hours']                            
-                    else:                  
-                        if duration_factors['minutes'] > 0:
-                            duration = 'minute'
-                            temp_factor = duration_factors['minutes']                                  
-                        else:
-                            if duration_factors['days'] > 0:
-                                duration = 'mekunde'
-                                temp_factor = duration_factors['seconds']  
+                    if duration_factors['days'] > 0:
+                        duration = 'tag'
+                        temp_factor = duration_factors['days']  
+                    else:            
+                        if  duration_factors['hours'] > 0:
+                            duration = 'stunde'
+                            temp_factor = duration_factors['hours']                            
+                        else:                  
+                            if duration_factors['minutes'] > 0:
+                                duration = 'minute'
+                                temp_factor = duration_factors['minutes']                                  
+                            else:
+                                if duration_factors['days'] > 0:
+                                    duration = 'mekunde'
+                                    temp_factor = duration_factors['seconds']  
                             
         result['duration'] = duration
         result['duration_factor'] = temp_factor
