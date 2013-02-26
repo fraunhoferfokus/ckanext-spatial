@@ -966,23 +966,6 @@ class GeminiHarvester(SpatialHarvester):
             if len(view_resources):
                 view_resources[0]['ckan_recommended_wms_preview'] = True
 
-        if package is None or package.title != gemini_values['title']:
-            if 'destatis' in harvest_object.source.url:
-                table_id = ''
-                m = re.search('tabelleDownload/(\d+-\d+).', package_dict['resources'][0]['url'])
-                if m:
-                    table_id = m.group(1)
-        
-                name = 'destatis-dataset-'+table_id
-            else:
-                name = self.gen_new_name(gemini_values['title'])
-            if not name:
-                name = self.gen_new_name(str(gemini_guid))
-            if not name:
-                raise Exception('Could not generate a unique name from the title or the GUID. Please choose a more unique title.')
-            package_dict['name'] = name
-        else:
-            package_dict['name'] = package.name
 
         extras_as_dict = []
         for key,value in extras.iteritems():
@@ -1015,8 +998,27 @@ class GeminiHarvester(SpatialHarvester):
                 else:
                     package_dict['type'] = 'dokument'
 
-
             self.copy_metadata_original_id_to_URL(package_dict)
+
+            if package is None or package.title != gemini_values['title']:
+                if 'destatis' in harvest_object.source.url:
+                    table_id = ''
+                    m = re.search('tabelleDownload/(\d+-\d+).', package_dict['resources'][0]['url'])
+                    if m:
+                        table_id = m.group(1)
+                    if package_dict['url'].endswith('type=service'):
+                        name = 'destatis-service-'+table_id
+                    else:
+                        name = 'destatis-dataset-'+table_id
+                else:
+                    name = self.gen_new_name(gemini_values['title'])
+                if not name:
+                    name = self.gen_new_name(str(gemini_guid))
+                if not name:
+                    raise Exception('Could not generate a unique name from the title or the GUID. Please choose a more unique title.')
+                package_dict['name'] = name
+            else:
+                package_dict['name'] = package.name
             if package == None:
                 # Create new package from data.
                 package = self._create_package_from_data(package_dict)
