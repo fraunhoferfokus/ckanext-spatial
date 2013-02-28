@@ -226,6 +226,13 @@ class GeminiResponsibleParty(GeminiElement):
                     ],
                     multiplicity="0..1",
                 ),
+                GeminiElement(
+                    name="url",
+                    search_paths=[
+                        "gmd:onlineResource/gmd:CI_OnlineResource/gmd:linkage/gmd:URL/text()",
+                    ],
+                    multiplicity="0..1",
+                ),
             ]
         ),
         GeminiElement(
@@ -234,7 +241,7 @@ class GeminiResponsibleParty(GeminiElement):
                 "gmd:role/gmd:CI_RoleCode/@codeListValue",
             ],
             multiplicity="0..1",
-        ),        
+        ),
     ]
 
 
@@ -747,13 +754,22 @@ class InspireDocument(MappedXmlDocument):
             multiplicity="*",
         ),
         GeminiReferenceDate(
-            name="dataset-reference-date",
+            name="dataset-date",
             search_paths=[
                 "gmd:identificationInfo/gmd:MD_DataIdentification/gmd:citation/gmd:CI_Citation/gmd:date/gmd:CI_Date",
                 "gmd:identificationInfo/srv:SV_ServiceIdentification/gmd:citation/gmd:CI_Citation/gmd:date/gmd:CI_Date",
             ],
             multiplicity="*",
         ),
+                
+        GeminiReferenceDate(
+            name="service-date",
+            search_paths=[
+                "gmd:identificationInfo/srv:SV_ServiceIdentification/gmd:citation/gmd:CI_Citation/gmd:date/gmd:CI_Date",
+            ],
+            multiplicity="*",
+        ),
+                
         # # Todo: Suggestion from PP not to bother pulling this into the package.
         # GeminiElement(
         # name="unique-resource-identifier",
@@ -785,7 +801,7 @@ class InspireDocument(MappedXmlDocument):
             search_paths=[
                 "gmd:identificationInfo/gmd:MD_DataIdentification/gmd:resourceMaintenance/gmd:MD_MaintenanceInformation/gmd:maintenanceAndUpdateFrequency/gmd:MD_MaintenanceFrequencyCode/@codeListValue",
                 "gmd:identificationInfo/srv:SV_ServiceIdentification/gmd:resourceMaintenance/gmd:MD_MaintenanceInformation/gmd:maintenanceAndUpdateFrequency/gmd:MD_MaintenanceFrequencyCode/@codeListValue",
-
+                
                 "gmd:identificationInfo/gmd:MD_DataIdentification/gmd:resourceMaintenance/gmd:MD_MaintenanceInformation/gmd:maintenanceAndUpdateFrequency/gmd:MD_MaintenanceFrequencyCode/text()",
                 "gmd:identificationInfo/srv:SV_ServiceIdentification/gmd:resourceMaintenance/gmd:MD_MaintenanceInformation/gmd:maintenanceAndUpdateFrequency/gmd:MD_MaintenanceFrequencyCode/text()",
             ],
@@ -975,7 +991,7 @@ class InspireDocument(MappedXmlDocument):
             ],
 
             multiplicity="0..1",
-        ),           
+        ),
         GeminiElement(
             name="vertical-extent",
             search_paths=[
@@ -1018,7 +1034,7 @@ class InspireDocument(MappedXmlDocument):
                 "gmd:distributionInfo/gmd:MD_Distribution/gmd:transferOptions/gmd:MD_DigitalTransferOptions/gmd:onLine/gmd:CI_OnlineResource",
             ],
             multiplicity="*",
-        ),               
+        ),
         GeminiResourceLocator(
             name="service-locator",
             search_paths=[
@@ -1085,12 +1101,13 @@ class InspireDocument(MappedXmlDocument):
         self.infer_date_released(values)
         self.infer_date_updated(values)
         self.infer_date_created(values)
+        self.infer_special_url(values)
         self.infer_url(values)
         # Todo: Infer resources.
         self.infer_tags(values)
         self.infer_publisher(values)
         self.infer_contact(values)
-        #self.infer_contact_email(values)
+        # self.infer_contact_email(values)
         self.infer_groups(values)
         self.infer_special_tags(values)
         self.infer_pointOfContact(values)
@@ -1099,33 +1116,50 @@ class InspireDocument(MappedXmlDocument):
 
     def infer_date_released(self, values):
         value = []
-        for date in values['dataset-reference-date']:
-            if date['type'] == 'publication':
-                value.append(date['value'])
+        for key in ['service-date', 'dataset-date']:
+            for date in values[key]:
+                if date['type'] == 'publication' and date['value'] not in value:
+                    value.append(date['value'])                
         values['date-released'] = value
 
     def infer_date_updated(self, values):
         value = []
         # Use last of several multiple revision dates.
-        for date in values['dataset-reference-date']:
-            if date['type'] == 'revision':
-                value.append(date['value'])
+        for key in ['service-date', 'dataset-date']:
+            for date in values[key]:
+                if date['type'] == 'revision' and date['value'] not in value:
+                    value.append(date['value'])
         values['date-updated'] = value
 
     def infer_date_created(self, values):
         value = []
-        for date in values['dataset-reference-date']:
-            if date['type'] == 'creation':
-                value.append(date['value'])
+        for key in ['service-date', 'dataset-date']:
+            for date in values[key]:
+                if date['type'] == 'creation' and date['value'] not in value:
+                    value.append(date['value'])
         values['date-created'] = value
 
 
+    def infer_special_url(self, values):
+        value = ''
+        used_datasets = []
+        found_resources = []
+        for locator in values['resource-locator']:
+            if ('Weitere Informationen' in locator['name'] and 'den Datensatz' in locator['name']) or ('URL zu weiteren Informationen' in locator['name'] and 'den Datensatz' in locator['name']):
+                values['further_info'] = locator['url']  
+                found_resources.append(locator) 
+            if 'Basisdaten' in locator['name']:
+                used_datasets.append(locator['name']) 
+                found_resources.append(locator)              
+        values['used_datasets'] = used_datasets 
+        
+        for resource in found_resources:
+            values['resource-locator'].remove(resource)  
+        
 
     def infer_url(self, values):
         value = ''
         for locator in values['resource-locator']:
-            if ('Weitere Informationen' in locator['name'] and 'den Datensatz' in locator['name']) or ('URL zu weiteren Informationen' in locator['name'] and 'den Datensatz' in locator['name']):
-                values['further_info'] = locator['url']            
             if locator['function'] == 'information':
                 value = locator['url']
                 break
@@ -1136,6 +1170,7 @@ class InspireDocument(MappedXmlDocument):
         for key in ['keyword-inspire-theme', 'keyword-controlled-other', 'keyword-free-text']:
             for item in values[key]:
                 if item not in tags:
+                    #item = item.encode('utf8')
                     tags.append(item)
         values['tags'] = tags
 
@@ -1168,7 +1203,7 @@ class InspireDocument(MappedXmlDocument):
     def infer_special_tags(self, values):
         
         tags = values['tags']
-        #print tags
+        # print tags
         size = len(values['keyword-list-with-thesaurus'])    
         xpath_keyword = "gmd:keyword/gco:CharacterString/text()"
 
@@ -1184,7 +1219,7 @@ class InspireDocument(MappedXmlDocument):
                     if item not in tags:
                         tags.append(item)
         
-        #print tags                
+        # print tags                
         values['special_tags'] = tags
   
                   
@@ -1221,8 +1256,6 @@ class InspireDocument(MappedXmlDocument):
     
         
     def infer_pointOfContact(self, values):
-
-
         for responsible_party in values['responsible-organisation']:
             
             if isinstance(responsible_party, dict) and \
@@ -1236,7 +1269,7 @@ class InspireDocument(MappedXmlDocument):
                     adminitrativeArea = ''
                     postalCode = ''
                     address = ''
-                    email =''
+                    email = ''
                     individual_name = ''
                     organisation_name = ''
                     position_name = ''
@@ -1247,6 +1280,9 @@ class InspireDocument(MappedXmlDocument):
                         
                     if responsible_party['contact-info'].has_key('city'):
                         city = responsible_party['contact-info']['city']
+                        
+                    if responsible_party['contact-info'].has_key('url'):
+                        url = responsible_party['contact-info']['url']
                         
                     if responsible_party['contact-info'].has_key('adminitrativeArea'):
                         adminitrativeArea = responsible_party['contact-info']['adminitrativeArea']    
@@ -1269,8 +1305,6 @@ class InspireDocument(MappedXmlDocument):
                     if responsible_party.has_key('position-name'):
                         position_name = responsible_party['position-name']
                     
-                    if responsible_party.has_key('url'):
-                        url = responsible_party['url']
                                        
                     if deliveryPoint and postalCode:                     
                
@@ -1288,11 +1322,11 @@ class InspireDocument(MappedXmlDocument):
         
                     values[responsible_party['role'] + '-address'] = address 
                     values[responsible_party['role'] + '-email'] = email
-                    values[responsible_party['role'] + '-individual-name'] =  individual_name
-                    values[responsible_party['role'] + '-organisation-name'] =  organisation_name
+                    values[responsible_party['role'] + '-individual-name'] = individual_name
+                    values[responsible_party['role'] + '-organisation-name'] = organisation_name
                     values[responsible_party['role'] + '-position-name'] = position_name    
                     values[responsible_party['role'] + '-url'] = url    
-                    #print responsible_party['role']     
+               
 
     def infer_contact_email(self, values):
         value = ''

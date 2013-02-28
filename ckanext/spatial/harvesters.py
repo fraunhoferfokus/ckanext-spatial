@@ -630,16 +630,6 @@ class GeminiHarvester(SpatialHarvester):
 
         extras = {}
 
-        
-        
-            
-        #if gemini_values['coupled-resource']:
-        #    extras['used_datasets'] = []
-        #    for res in gemini_values['coupled-resource']:
-        #        extras['used_datasets'].append(res['uuid'][0])        
-       
-
-       
         #temporal granularity information
         duration_translator = DurationTranslator()      
         temp_duration = ''
@@ -680,10 +670,6 @@ class GeminiHarvester(SpatialHarvester):
               
         dates = []    
         
-        #release_dates_combined = []
-        #release_dates_combined.append(gemini_values['metadata-date'])
-        #release_dates_combined = release_dates_combined + gemini_values['date-released']
-        
         release_dates = self.get_dates(gemini_values['date-released'], u'veroeffentlicht')
         creation_dates = self.get_dates(gemini_values['date-created'], u'erstellt')
         update_dates = self.get_dates(gemini_values['date-updated'], u'aktualisiert')
@@ -695,7 +681,7 @@ class GeminiHarvester(SpatialHarvester):
  
  
         extras['subgroups'] = gemini_values['topic-category']
-        #log.debug('Set subgroups: ' + str(gemini_values['topic-category']))
+        log.debug('Set subgroups: ' + str(gemini_values['topic-category']))
 
 
 
@@ -714,14 +700,11 @@ class GeminiHarvester(SpatialHarvester):
                 return None
 
         extras['terms_of_use'] = terms_of_use
-        
-        
-        
+
+
         # map INSPIRE responsible organisation fields to OGPD contacts
-
-        roles = ['publisher', 'owner', 'author', 'distributer', 'custodian', 'pointOfContact']
+        roles = ['publisher', 'owner', 'author', 'distributor', 'pointOfContact', 'resourceProvider']
         contacts = []
-
         for role in roles:
             contact = {}
             if gemini_values.has_key(role + '-email') and gemini_values[role + '-email']: 
@@ -736,44 +719,28 @@ class GeminiHarvester(SpatialHarvester):
                 else:
                     if gemini_values.has_key(role + '-organisation-name'):
                         contact['name'] = gemini_values[role + '-organisation-name']
+                    else:
+                        if gemini_values.has_key(role + '-position-name'):
+                            contact['name'] = gemini_values[role + '-position-name']
                     
             if gemini_values.has_key(role + '-address') and gemini_values[role + '-address']:
                 contact['address'] = gemini_values[role + '-address']
 
 
-
-            if len(contact) != 0:
-                if role == 'custodian': 
-                    contact['role'] = 'ansprechpartner'                     
+            if len(contact) != 0:                    
                 if role == 'pointOfContact':
-                    if gemini_values['pointOfContact-individual-name']:
-                        contact['role'] = 'ansprechpartner'
-                    else:
-                        contact['role'] = 'veroeffentlichende_stelle'
-                        contact['name'] = gemini_values['pointOfContact-organisation-name']              
-                else:                 
-                    if role == 'owner' or role == 'author':
-                        contact['role'] = 'autor'              
-                    else:                     
-                        if role == 'publisher':
-                            contact['role'] = 'veroeffentlichende_stelle'
-                            if gemini_values['pointOfContact-organisation-name']:
-                                contact['name'] = gemini_values['pointOfContact-organisation-name']
-                        else:                        
-                            if role == 'distributer' or role == 'resourceProvider':
-                                contact['role'] = 'vertrieb'  
-                        
-                if len(contacts) > 0:
-                    contains_role = False
-                    for c in contacts:
-                        if c['role'] == contact['role']: 
-                                contains_role = True
-                                break
-                    if not contains_role:
-                        contacts.append(contact)
-                else:
-                    contacts.append(contact)
-
+                    contact['role'] = 'ansprechpartner'   
+                elif role == 'publisher':
+                    contact['role'] = 'veroeffentlichende_stelle' 
+                    if gemini_values['publisher-organisation-name']:
+                                contact['name'] = gemini_values['publisher-organisation-name']  
+                elif role == 'owner' or role == 'author':
+                    contact['role'] = 'autor'   
+                elif role == 'distributor' or role == 'resourceProvider':
+                    contact['role'] = 'vertrieb'       
+                     
+                contacts.append(contact)   
+              
         extras['contacts'] = contacts
 
         # Construct a GeoJSON extent so ckanext-spatial can register the extent geometry
@@ -885,29 +852,25 @@ class GeminiHarvester(SpatialHarvester):
         self.obj = harvest_object
         self.obj.save()
         
+        '''
         #set the core ckan fields maintainer and author
-        if  gemini_values.has_key('pointOfContact-email'):
-            package_dict['maintainer_email'] = gemini_values['pointOfContact-email']
-            
-        if gemini_values.has_key('pointOfContact-individual-name'):
-            package_dict['maintainer'] = gemini_values['pointOfContact-individual-name']
-            
-        else:
-            if gemini_values.has_key('pointOfContact-organisation-name'):
-                package_dict['maintainer'] = gemini_values['pointOfContact-organisation-name']
+        #package_dict['author'] = 'ÖÄAS'  
+        package_dict['author_email'] = 'test@test.com'
         
+        test = u'öäas'
+        package_dict['maintainer'] = unicode(test)  
+        package_dict['maintainer_email'] ='test@test.com'
+         
+        '''
+        for contact in contacts:
+            if contact['role'] == 'veroeffentlichende_stelle':
+                package_dict['author'] = unicode(contact['name'])    
+                package_dict['author_email'] = contact['email']
+            if contact['role'] == 'ansprechpartner':
+                package_dict['maintainer'] = unicode(contact['name'])    
+                package_dict['maintainer_email'] = contact['email']
         
-        if  gemini_values.has_key('author-email'):
-            package_dict['author_email'] = gemini_values['author-email']
-        
-        if  gemini_values.has_key('author-individual-name'):
-            package_dict['author'] = gemini_values['author-individual-name']
-            
-        else:
-            if gemini_values.has_key('author-organisation-name'):
-                package_dict['author'] = gemini_values['author-organisation-name']
-            
-        
+       
         #type of the dataset 
         if 'application' in gemini_values['resource-type'] or 'service' in gemini_values['resource-type'] :
             package_dict['type'] = 'app'      
@@ -1120,9 +1083,8 @@ class GeminiHarvester(SpatialHarvester):
                 package = self._create_package_from_data(package_dict, package = package)
                 #log.info('Updated existing package ID %s with existing GEMINI guid %s', package['id'], gemini_guid)
     
+    
             # add relationships between datasets
-            
-            
             theparent = model.Package.by_name(name=package_dict['name'])
             for d in used_datasets_id:
                 thechild = model.Package.by_name(name=d)
@@ -1183,9 +1145,6 @@ class GeminiHarvester(SpatialHarvester):
 
             return package
        
-
-
-
    
     def _is_valid_URL(self,url):
         '''
@@ -1455,8 +1414,8 @@ class GeminiHarvester(SpatialHarvester):
  
         else:       
      
-            #csw = CswService('http://hmdk.de/csw')
-            csw = CswService('http://gateway.hamburg.de/OGCFassade/HH_CSW.aspx')
+            csw = CswService('http://hmdk.de/csw')
+            #csw = CswService('http://gateway.hamburg.de/OGCFassade/HH_CSW.aspx')
             data = csw.getrecordbyid([id])
             
             if data is None:
@@ -1536,7 +1495,6 @@ class GeminiHarvester(SpatialHarvester):
                 'Transport und Verkehr'                        : 'transport-verkehr',
                 'Umwelt und Klima'                             : 'umwelt-klima',
                 'Verbraucherschutz'                            : 'verbraucherschutz',
-               u'Öfentliche Verwaltung, Haushalt und Steuern'  : 'verwaltung',
                 'Wirtschaft und Arbeit'                        : 'wirtschaft-arbeit'
               }
   
@@ -1550,57 +1508,9 @@ class GeminiHarvester(SpatialHarvester):
                 if 'lkerung' in group:
                     out = 'bevoelkerung' 
         return out
-    
-    
-    
-    def _create_group(self, group_name):
-          
 
-        group_schema = logic.schema.default_group_schema()
-        
-        debug_exception_mode = bool(os.getenv('DEBUG'))
-        
-        context = {'model':model,
-                      'session':Session,
-                      'user':'harvest',
-                      'schema':group_schema,
-                      'extras_as_string':False,
-                      'api_version': '2'}
-        
-        group_dict = {'name': unicode(group_name)}
-        groups = Session.query(model.Group.name).autoflush(False).filter_by(name=group_name)
-        result = groups.first()
-         
-        
-        if not result:
-                action_function = get_action('group_create')
-        
-                try:
-                    group_dict = action_function(context, group_dict)
-                    return group_dict
-        
-                except ValidationError,e:
-                    raise Exception('Validation Error: %s %s' % (group_name,str(e.error_summary)))
-                    if debug_exception_mode:
-                            raise
 
-        
-    def fetch_and_import_used_dataset(self,harvest_object):
-        
-        package = None
-        
-        if OGPDHarvester.fetch_stage(self, harvest_object):
-            package = OGPDHarvester.import_stage(self, harvest_object)
-            
-        return package 
-        
-    def get_future_name(self,title):   
-        name = munge_title_to_name(title).replace('_', '-')
-        while '--' in name:
-            name = name.replace('--', '-')
-        return name
 
-        
     def gen_new_name(self, title):
         name = munge_title_to_name(title).replace('_', '-')
         while '--' in name:
@@ -1624,8 +1534,7 @@ class GeminiHarvester(SpatialHarvester):
             if o.scheme and o.netloc:
                 return licence
         return None
-    
-    
+  
     
     def _create_related_item(self, related_dict):
         
@@ -1636,7 +1545,6 @@ class GeminiHarvester(SpatialHarvester):
                    'extras_as_string':True,
                    'api_version': '2'}
         
-
         try:
             action_function = get_action('related_create')      
             related_dict = action_function(context, related_dict)
@@ -2034,25 +1942,24 @@ class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
     def read_formats(self):
             
         import json
-        
+        import os
         try:
-            dataset_formats = open('formats/dataset_formats.json', 'r')
+            dataset_formats = open('/opt/ckan/pyenv/src/ckan/formats/dataset_formats.json', 'r')
             self.resource_formats = json.loads(dataset_formats.read())
-            dataset_formats.close()
+            dataset_formats.close()    
         except Exception, e:
-            log.error('Error occurred while reading dataset formats: %r' %e)
-            
+            log.error('Error occurred while reading dataset formats: %r' %(os.getcwd()))   
         try:  
-            app_formats = open('formats/application_formats.json', 'r')
+            app_formats = open('/opt/ckan/pyenv/src/ckan/formats/application_formats.json', 'r')
             self.service_formats = json.loads(app_formats.read())
             app_formats.close()
         
         except Exception, e:
-            log.error('Error occurred while reading application formats %r' %e)
+            log.error('Error occurred while reading application formats %r' %(os.getcwd()))
     
     
     def gather_stage(self,harvest_job):
-        #log.debug('In OGPDHarvester gather_stage')
+        log.debug('In OGPDHarvester gather_stage')
         # Get source URL
         url = harvest_job.source.url
         self.job = harvest_job 

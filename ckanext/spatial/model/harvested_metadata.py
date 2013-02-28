@@ -801,7 +801,7 @@ class InspireDocument(MappedXmlDocument):
             search_paths=[
                 "gmd:identificationInfo/gmd:MD_DataIdentification/gmd:resourceMaintenance/gmd:MD_MaintenanceInformation/gmd:maintenanceAndUpdateFrequency/gmd:MD_MaintenanceFrequencyCode/@codeListValue",
                 "gmd:identificationInfo/srv:SV_ServiceIdentification/gmd:resourceMaintenance/gmd:MD_MaintenanceInformation/gmd:maintenanceAndUpdateFrequency/gmd:MD_MaintenanceFrequencyCode/@codeListValue",
-
+                
                 "gmd:identificationInfo/gmd:MD_DataIdentification/gmd:resourceMaintenance/gmd:MD_MaintenanceInformation/gmd:maintenanceAndUpdateFrequency/gmd:MD_MaintenanceFrequencyCode/text()",
                 "gmd:identificationInfo/srv:SV_ServiceIdentification/gmd:resourceMaintenance/gmd:MD_MaintenanceInformation/gmd:maintenanceAndUpdateFrequency/gmd:MD_MaintenanceFrequencyCode/text()",
             ],
@@ -1256,8 +1256,6 @@ class InspireDocument(MappedXmlDocument):
     
         
     def infer_pointOfContact(self, values):
-
-
         for responsible_party in values['responsible-organisation']:
             
             if isinstance(responsible_party, dict) and \
@@ -1328,7 +1326,7 @@ class InspireDocument(MappedXmlDocument):
                     values[responsible_party['role'] + '-organisation-name'] = organisation_name
                     values[responsible_party['role'] + '-position-name'] = position_name    
                     values[responsible_party['role'] + '-url'] = url    
-                    # print responsible_party['role']     
+               
 
     def infer_contact_email(self, values):
         value = ''
