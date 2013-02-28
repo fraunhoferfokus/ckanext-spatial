@@ -1256,12 +1256,13 @@ class InspireDocument(MappedXmlDocument):
     
         
     def infer_pointOfContact(self, values):
+        used_roles = []
         for responsible_party in values['responsible-organisation']:
             
             if isinstance(responsible_party, dict) and \
                isinstance(responsible_party.get('contact-info'), dict):
                                        
-                if responsible_party.has_key('role'):    
+                if responsible_party.has_key('role') and responsible_party['role'] not in used_roles:    
                      
                     country = ''
                     city = ''
@@ -1325,7 +1326,10 @@ class InspireDocument(MappedXmlDocument):
                     values[responsible_party['role'] + '-individual-name'] = individual_name
                     values[responsible_party['role'] + '-organisation-name'] = organisation_name
                     values[responsible_party['role'] + '-position-name'] = position_name    
-                    values[responsible_party['role'] + '-url'] = url    
+                    values[responsible_party['role'] + '-url'] = url   
+                    
+                    
+                    used_roles.append(responsible_party['role']) 
                
 
     def infer_contact_email(self, values):
