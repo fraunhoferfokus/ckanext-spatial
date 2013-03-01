@@ -622,7 +622,7 @@ class GeminiHarvester(SpatialHarvester):
     def handle_licenses(self, gemini_values):
         return licenses.translate_license_data(gemini_values)
 
-    def copy_author_to_maintainer(self, package_dict):
+    def copy_author_to_maintainer(self, package_dict, extras):
         pass
 
     def copy_metadata_original_id_to_URL(self, package_dict):
@@ -937,15 +937,6 @@ class GeminiHarvester(SpatialHarvester):
         if reactivate_package:
             package_dict['state'] = u'active'
 
-        if package is None or package.title != gemini_values['title']:
-            name = self.gen_new_name(gemini_values['title'])
-            if not name:
-                name = self.gen_new_name(str(gemini_guid))
-            if not name:
-                raise Exception('Could not generate a unique name from the title or the GUID. Please choose a more unique title.')
-            package_dict['name'] = name
-        else:
-            package_dict['name'] = package.name
 
         resource_locators = gemini_values.get('resource-locator', [])
         resources = self.handle_resources(resource_locators)
@@ -975,12 +966,13 @@ class GeminiHarvester(SpatialHarvester):
             if len(view_resources):
                 view_resources[0]['ckan_recommended_wms_preview'] = True
 
+
         extras_as_dict = []
         for key,value in extras.iteritems():
             if isinstance(value,(basestring,Number)):
-               extras_as_dict.append({'key':key,'value':value})
+                extras_as_dict.append({'key':key,'value':value})
             else:
-               extras_as_dict.append({'key':key,'value':json.dumps(value, ensure_ascii = False)})
+                extras_as_dict.append({'key':key,'value':json.dumps(value, ensure_ascii = False)})
 
         package_dict['extras'] = extras_as_dict
 
@@ -1004,10 +996,29 @@ class GeminiHarvester(SpatialHarvester):
                 if 'dataset' in gemini_values['resource-type'] or 'nonGeographicDataset' in gemini_values['resource-type'] or 'database' in gemini_values['resource-type'] or  'series' in gemini_values['resource-type']:
                     package_dict['type'] = 'datensatz'
                 else:
-                    package_dict['type'] = 'dokument'
-
+                    package_dict['type'] = 'datensatz'
 
             self.copy_metadata_original_id_to_URL(package_dict)
+
+            if package is None or package.title != gemini_values['title']:
+                if 'destatis' in harvest_object.source.url:
+                    table_id = ''
+                    m = re.search('tabelleDownload/(\d+-\d+).', package_dict['resources'][0]['url'])
+                    if m:
+                        table_id = m.group(1)
+                    if package_dict['url'].endswith('type=service'):
+                        name = 'destatis-service-'+table_id
+                    else:
+                        name = 'destatis-dataset-'+table_id
+                else:
+                    name = self.gen_new_name(gemini_values['title'])
+                if not name:
+                    name = self.gen_new_name(str(gemini_guid))
+                if not name:
+                    raise Exception('Could not generate a unique name from the title or the GUID. Please choose a more unique title.')
+                package_dict['name'] = name
+            else:
+                package_dict['name'] = package.name
             if package == None:
                 # Create new package from data.
                 package = self._create_package_from_data(package_dict)
@@ -1622,6 +1633,8 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
     implements(IHarvester)
 
     temp_directory = '/temp_destatis_dir'
+    zip_filename = '/file_destatis.zip'
+    
     def info(self):
         return {
             'name': 'destatis',
@@ -1641,11 +1654,11 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
         # remove old dir from previous harvest run
         if(os.path.exists(tmpdir + self.temp_directory)):
             shutil.rmtree(tmpdir + self.temp_directory)
-        if(os.path.exists(tmpdir + '/file_destatis.zip')):
-            os.remove(tmpdir + '/file_destatis.zip')
+        if(os.path.exists(tmpdir + self.zip_filename)):
+            os.remove(tmpdir + self.zip_filename)
         try:
             req = urllib2.urlopen(url)
-            local_file = open(tmpdir + "/file_destatis.zip", "wb")
+            local_file = open(tmpdir + self.zip_filename, "wb")
             while 1:
                 packet = req.read()
                 if not packet:
@@ -1660,7 +1673,7 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
             req.close()
 
         import zipfile
-        zipfile.ZipFile(tmpdir+"/file_destatis.zip","r").extractall(tmpdir+self.temp_directory)
+        zipfile.ZipFile(tmpdir+self.zip_filename,"r").extractall(tmpdir+self.temp_directory)
 
         ids = []
         for xml_file in os.listdir(tmpdir+self.temp_directory):
@@ -1760,19 +1773,27 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
                             url = url.replace('tabelleErgebnis','tabelleDownload')[:-5] + '.xls'
                             resource_format = 'XLS'
                         else:
-                            url = url.replace('tabelleErgebnis','tabelleDownload')[:-4] + '.xls'
+                            url = url.replace('tabelleErgebnis','tabelleDownload') + '.xls'
                             resource_format = 'XLS'
-                    resource.update(
-                        {
-                            'url': url,
-                            'name': resource_format + ' - Ressource',
-                            'description': resource_format + ' - Ressource',
-                            'format': resource_format or None,
-                            'resource_locator_protocol': resource_locator.get('protocol',''),
-                            'resource_locator_function':resource_locator.get('function','')
-
-                        })
-                    result.append(resource)
+                    elif 'tabelleDownload' in url:
+                        if url.endswith('.xml'):
+                            resource_format = 'XML'
+                    if resource_format:
+                        resource.update(
+                            {
+                                'url': url,
+                                'name': resource_format + ' - Ressource',
+                                'description': resource_format + ' - Ressource',
+                                'format': resource_format or None,
+                                'resource_locator_protocol': resource_locator.get('protocol',''),
+                                'resource_locator_function':resource_locator.get('function','')
+    
+                            })
+                        result.append(resource)
+                    else:
+                        log.info("Weird Resource, write URL to file")
+                        with open('Failed.txt', 'a') as f:
+                            f.write("Weird Resource: %s\n" %url)
         return result
 
     def handle_licenses(self, gemini_values):
@@ -1803,3 +1824,26 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
         for x in package_dict['extras']:
             if x['key'] == 'metadata_original_id':
                 package_dict['url'] = x['value']
+
+class RegionalStatistikHarvester(DestatisHarvester, SingletonPlugin):
+    '''
+    A Harvester for CSW servers, for targeted at import into the German Open Data Platform now focused on RegionalStatistik
+    '''
+    implements(IHarvester)
+
+    temp_directory = '/temp_regio_dir'
+    zip_filename = '/file_destatis.zip'
+    
+    def info(self):
+        return {
+            'name': 'regionalstatistik',
+            'title': 'RegionalStastik Harvester',
+            'description': 'Harvester for CSW Servers, which return a zip file with xml files like RegionalStatistik'
+            }
+
+    def handle_licenses(self, gemini_values):
+        license_dict = {'license_url':"https://www.regionalstatistik.de/genesis/online?Menu=Impressum",
+                        'license_id':'other-open',
+                        'other':u'Vervielfältigung und Verbreitung, auch auszugsweise, mit Quellenangabe gestattet.'}
+        
+        return license_dict
