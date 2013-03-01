@@ -1615,26 +1615,6 @@ class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
         self.csw = CswService(url)
 
 
-class HamburgCKANHarvester(CKANHarvester):
-    '''
-    A CKAN Harvester for Hamburg solving data compatibility problems.
-    '''
-
-    api_version = '1'
-    '''Enforces API version 1 for making the group import possible'''
-
-    def info(self):
-        return {'name':        'hamburg',
-                'title':       'Hamburg Harvester',
-                'description': 'A CKAN Harvester for Hamburg solving data compatibility problems.'}
-
-    def import_stage(self, harvest_object):
-        package_dict = json.loads(harvest_object.content)
-        package_dict['groups'] = [name.replace('-', '_') for name in package_dict['groups']]
-        harvest_object.content = json.dumps(package_dict)
-        return super(HamburgCKANHarvester, self).import_stage(harvest_object)
-
-
 class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
     '''
     A Harvester for CSW servers, for targeted at import into the German Open Data Platform now focused on Destatis
