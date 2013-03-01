@@ -41,7 +41,7 @@ setup(
     ogpd_harvester=ckanext.spatial.harvesters:OGPDHarvester
     destatis_harvester=ckanext.spatial.harvesters:DestatisHarvester
     hamburg_harvester=ckanext.spatial.harvesters:HamburgCKANHarvester
-
+    regio_harvester=ckanext.spatial.harvesters:RegionalStatistikHarvester
     [paste.paster_command]
     spatial=ckanext.spatial.commands.spatial:Spatial
     validation=ckanext.spatial.commands.validation:Validation
