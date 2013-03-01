@@ -622,7 +622,7 @@ class GeminiHarvester(SpatialHarvester):
     def handle_licenses(self, gemini_values):
         return licenses.translate_license_data(gemini_values)
 
-    def copy_author_to_maintainer(self, package_dict):
+    def copy_author_to_maintainer(self, package_dict, extras):
         pass
 
     def copy_metadata_original_id_to_URL(self, package_dict):
@@ -996,7 +996,7 @@ class GeminiHarvester(SpatialHarvester):
                 if 'dataset' in gemini_values['resource-type'] or 'nonGeographicDataset' in gemini_values['resource-type'] or 'database' in gemini_values['resource-type'] or  'series' in gemini_values['resource-type']:
                     package_dict['type'] = 'datensatz'
                 else:
-                    package_dict['type'] = 'dokument'
+                    package_dict['type'] = 'datensatz'
 
             self.copy_metadata_original_id_to_URL(package_dict)
 
@@ -1653,6 +1653,8 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
     implements(IHarvester)
 
     temp_directory = '/temp_destatis_dir'
+    zip_filename = '/file_destatis.zip'
+    
     def info(self):
         return {
             'name': 'destatis',
@@ -1672,11 +1674,11 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
         # remove old dir from previous harvest run
         if(os.path.exists(tmpdir + self.temp_directory)):
             shutil.rmtree(tmpdir + self.temp_directory)
-        if(os.path.exists(tmpdir + '/file_destatis.zip')):
-            os.remove(tmpdir + '/file_destatis.zip')
+        if(os.path.exists(tmpdir + self.zip_filename)):
+            os.remove(tmpdir + self.zip_filename)
         try:
             req = urllib2.urlopen(url)
-            local_file = open(tmpdir + "/file_destatis.zip", "wb")
+            local_file = open(tmpdir + self.zip_filename, "wb")
             while 1:
                 packet = req.read()
                 if not packet:
@@ -1691,7 +1693,7 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
             req.close()
 
         import zipfile
-        zipfile.ZipFile(tmpdir+"/file_destatis.zip","r").extractall(tmpdir+self.temp_directory)
+        zipfile.ZipFile(tmpdir+self.zip_filename,"r").extractall(tmpdir+self.temp_directory)
 
         ids = []
         for xml_file in os.listdir(tmpdir+self.temp_directory):
@@ -1842,3 +1844,26 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
         for x in package_dict['extras']:
             if x['key'] == 'metadata_original_id':
                 package_dict['url'] = x['value']
+
+class RegionalStatistikHarvester(DestatisHarvester, SingletonPlugin):
+    '''
+    A Harvester for CSW servers, for targeted at import into the German Open Data Platform now focused on RegionalStatistik
+    '''
+    implements(IHarvester)
+
+    temp_directory = '/temp_regio_dir'
+    zip_filename = '/file_destatis.zip'
+    
+    def info(self):
+        return {
+            'name': 'regionalstatistik',
+            'title': 'RegionalStastik Harvester',
+            'description': 'Harvester for CSW Servers, which return a zip file with xml files like RegionalStatistik'
+            }
+
+    def handle_licenses(self, gemini_values):
+        license_dict = {'license_url':"https://www.regionalstatistik.de/genesis/online?Menu=Impressum",
+                        'license_id':'other-open',
+                        'other':u'Vervielfältigung und Verbreitung, auch auszugsweise, mit Quellenangabe gestattet.'}
+        
+        return license_dict
