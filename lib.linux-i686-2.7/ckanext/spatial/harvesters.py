@@ -566,6 +566,7 @@ class GeminiHarvester(SpatialHarvester):
 
         gemini_guid = gemini_values['guid']
         
+        package_exists = False
         self.related_data_ids.append(gemini_guid)
         #log.debug('RELATIONSHIP_PACKAGE: %s', gemini_guid)        
 
@@ -616,15 +617,20 @@ class GeminiHarvester(SpatialHarvester):
                 # new document has a more recent modified date
                 if package.state == u'deleted':
                     if last_harvested_object.metadata_modified_date < self.obj.metadata_modified_date:
-                        #log.info('Package for object with GUID %s will be re-activated' % gemini_guid)
+                        log.info('Package for object with GUID %s will be re-activated' % gemini_guid)
                         reactivate_package = True
                     else:
-                         #log.info('Remote record with GUID %s is not more recent than a deleted package, skipping... ' % gemini_guid)
+                         log.info('Remote record with GUID %s is not more recent than a deleted package, skipping... ' % gemini_guid)
                          return None
 
             else:
-                #log.info('Document with GUID %s unchanged, skipping...' % (gemini_guid))
-                return None
+                log.info('Document with GUID %s unchanged, skipping...' % (gemini_guid))
+                package_exists = True
+                package = last_harvested_object.package
+                print package
+                print package.extras
+                
+                #return None
         else:
             log.info('No package with INSPIRE guid %s found, let''s create one' % gemini_guid)
 
@@ -740,7 +746,7 @@ class GeminiHarvester(SpatialHarvester):
                     contact['role'] = 'vertrieb'       
                      
                 contacts.append(contact)   
-              
+        
         extras['contacts'] = contacts
 
         # Construct a GeoJSON extent so ckanext-spatial can register the extent geometry
@@ -852,16 +858,7 @@ class GeminiHarvester(SpatialHarvester):
         self.obj = harvest_object
         self.obj.save()
         
-        '''
-        #set the core ckan fields maintainer and author
-        #package_dict['author'] = 'ÖÄAS'  
-        package_dict['author_email'] = 'test@test.com'
-        
-        test = u'öäas'
-        package_dict['maintainer'] = unicode(test)  
-        package_dict['maintainer_email'] ='test@test.com'
-         
-        '''
+ 
         for contact in contacts:
             if contact['role'] == 'veroeffentlichende_stelle':
                 package_dict['author'] = unicode(contact['name'])    
@@ -897,15 +894,20 @@ class GeminiHarvester(SpatialHarvester):
         if reactivate_package:
             package_dict['state'] = u'active'
 
-        if package is None or package.title != gemini_values['title']:
-            name = self.gen_new_name(gemini_values['title'])
-            if not name:
-                name = self.gen_new_name(str(gemini_guid))
-            if not name:
-                raise Exception('Could not generate a unique name from the title or the GUID. Please choose a more unique title.')
-            package_dict['name'] = name
-        else:
+        
+        if package is not None:
             package_dict['name'] = package.name
+
+        else:
+            if package is None or package.title != gemini_values['title']:
+                name = self.gen_new_name(gemini_values['title'])
+                if not name:
+                    name = self.gen_new_name(str(gemini_guid))
+                if not name:
+                    raise Exception('Could not generate a unique name from the title or the GUID. Please choose a more unique title.')
+                package_dict['name'] = name
+            else:
+                package_dict['name'] = package.name
 
         resource_locators = gemini_values.get('resource-locator', [])
         service_locators = gemini_values.get('service-locator', [])
@@ -1057,6 +1059,13 @@ class GeminiHarvester(SpatialHarvester):
         extras['sector'] = 'oeffentlich'
         
 
+        if package_exists:
+            # copy each new added field (simulate an update)
+            for key,value in package.extras.iteritems():
+                if key not in extras.keys():
+                    extras[key] = value 
+                
+            
         extras_as_dict = []
         for key,value in extras.iteritems():
             if isinstance(value,(basestring,Number)):
@@ -1074,8 +1083,10 @@ class GeminiHarvester(SpatialHarvester):
             return None
 
         else:
-            
-            if package == None:
+            if package_exists:
+                package = self._create_package_from_data(package_dict, package = package)
+                #log.info('Updated existing package ID %s with existing GEMINI guid %s', package['id'], gemini_guid)  
+            elif package == None:
                 # Create new package from data.
                 package = self._create_package_from_data(package_dict)
                 #log.info('Created new package ID %s with GEMINI guid %s', package['id'], gemini_guid)
@@ -1956,6 +1967,7 @@ class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
         
         except Exception, e:
             log.error('Error occurred while reading application formats %r' %(os.getcwd()))
+
     
     
     def gather_stage(self,harvest_job):
