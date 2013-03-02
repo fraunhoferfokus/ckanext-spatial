@@ -583,59 +583,43 @@ class GeminiHarvester(SpatialHarvester):
         self.obj.metadata_modified_date = metadata_modified_date
         self.obj.save()
 
-        last_harvested_object = Session.query(HarvestObject) \
-                            .filter(HarvestObject.guid==gemini_guid) \
-                            .filter(HarvestObject.current==True) \
-                            .all()
-
-        if len(last_harvested_object) == 1:
-            last_harvested_object = last_harvested_object[0]
-        elif len(last_harvested_object) > 1:
-                raise Exception('Application Error: more than one current record for GUID %s' % gemini_guid)
-          
-        reactivate_package = False
-        if last_harvested_object:
-            
-            # We've previously harvested this (i.e. it's an update)
-
-            # Use metadata modified date instead of content to determine if the package
-            # needs to be updated
-            if last_harvested_object.metadata_modified_date is None \
-                or last_harvested_object.metadata_modified_date < self.obj.metadata_modified_date \
-                or self.force_import \
-                or (last_harvested_object.metadata_modified_date == self.obj.metadata_modified_date and
-                    last_harvested_object.source.active is False):
-
-                if self.force_import:
-                    log.info('Import forced for object %s with GUID %s' % (self.obj.id,gemini_guid))
-                else:
-                    log.info('Package for object with GUID %s needs to be created or updated' % gemini_guid)
-
-                package = last_harvested_object.package
-
-                # If the package has a deleted state, we will only update it and reactivate it if the
-                # new document has a more recent modified date
-                if package.state == u'deleted':
-                    if last_harvested_object.metadata_modified_date < self.obj.metadata_modified_date:
-                        log.info('Package for object with GUID %s will be re-activated' % gemini_guid)
-                        reactivate_package = True
-                    else:
-                         log.info('Remote record with GUID %s is not more recent than a deleted package, skipping... ' % gemini_guid)
-                         return None
-
-            else:
-                log.info('Document with GUID %s unchanged, skipping...' % (gemini_guid))
-                package_exists = True
-                package = last_harvested_object.package
-                print package
-                print package.extras
+        
                 
-                #return None
+        packages = []  
+        name = self.gen_future_name(gemini_values['title'])
+        like_q = u'%s%%' % name
+        pkg_query = Session.query(Package).filter(Package.name.ilike(like_q)).limit(100)
+        
+        for pkg in pkg_query:
+            try:
+                if pkg.extras['metadata_original_id'] == gemini_guid and pkg.state != u'deleted':
+                    packages.append(pkg)
+            except Exception, e:
+                log.debug('Guid check for %s failed with exception: %s' % (name, str(e)))
+                if pkg.name == name and pkg.state != u'deleted':
+                    packages.append(pkg)
+
+                
+                          
+        last_harvested_package = None      
+        if len(packages) == 1:
+            last_harvested_package = packages[0]
+        elif len(packages) > 1:
+                raise Exception('Application Error: more than one current record for GUID %s' % gemini_guid)
+                  
+        
+        if last_harvested_package:
+            log.info('Package for object with GUID %s needs to be updated' % gemini_guid)
+            package_exists = True
+            package = last_harvested_package
+                
         else:
             log.info('No package with INSPIRE guid %s found, let''s create one' % gemini_guid)
 
+        
+        reactivate_package = False
+        
         extras = {}
-
         #temporal granularity information
         duration_translator = DurationTranslator()      
         temp_duration = ''
@@ -685,9 +669,9 @@ class GeminiHarvester(SpatialHarvester):
         extras['dates']= dates 
  
  
- 
-        extras['subgroups'] = gemini_values['topic-category']
-        log.debug('Set subgroups: ' + str(gemini_values['topic-category']))
+        if len(gemini_values['topic-category']) > 0:
+            extras['subgroups'] = gemini_values['topic-category']
+            log.debug('Set subgroups: ' + str(gemini_values['topic-category']))
 
 
 
@@ -1028,11 +1012,6 @@ class GeminiHarvester(SpatialHarvester):
                 if len(view_resources):
                     view_resources[0]['ckan_recommended_wms_preview'] = True
                     
-       
-       
-       
-       
-       
 
             # Guess the best view service to use in WMS preview
             verified_view_resources = [r for r in package_dict['resources'] if 'verified' in r and r['format'] == 'WMS']
@@ -1060,9 +1039,10 @@ class GeminiHarvester(SpatialHarvester):
         
 
         if package_exists:
-            # copy each new added field (simulate an update)
+            # copy each new added field
             for key,value in package.extras.iteritems():
                 if key not in extras.keys():
+                    log.debug('Found a new added key: %s', key)
                     extras[key] = value 
                 
             
@@ -1156,6 +1136,14 @@ class GeminiHarvester(SpatialHarvester):
 
             return package
        
+   
+    def gen_future_name(self, title):
+        name = munge_title_to_name(title).replace('_', '-')
+        while '--' in name:
+            name = name.replace('--', '-')
+        
+        return name
+   
    
     def _is_valid_URL(self,url):
         '''
@@ -1967,7 +1955,6 @@ class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
         
         except Exception, e:
             log.error('Error occurred while reading application formats %r' %(os.getcwd()))
-
     
     
     def gather_stage(self,harvest_job):
