@@ -586,18 +586,17 @@ class GeminiHarvester(SpatialHarvester):
         
                 
         packages = []  
-        name = self.gen_future_name(gemini_values['title'])
-        like_q = u'%s%%' % name
-        pkg_query = Session.query(Package).filter(Package.name.ilike(like_q)).limit(100)
-        
+        #name = self.gen_future_name(gemini_values['title'])
+        #like_q = u'%s%%' % name
+        pkg_query = Session.query(Package)
+                
         for pkg in pkg_query:
             try:
                 if pkg.extras['metadata_original_id'] == gemini_guid and pkg.state != u'deleted':
                     packages.append(pkg)
             except Exception, e:
                 log.debug('Guid check for %s failed with exception: %s' % (name, str(e)))
-                if pkg.name == name and pkg.state != u'deleted':
-                    packages.append(pkg)
+                log.debug('Guid %s, metadata_original_id: %s' % (name, str(e)))
 
                 
                           
@@ -1917,6 +1916,8 @@ class GeminiWafHarvester(GeminiHarvester, SingletonPlugin):
         base_url = '/'.join(base_url)
         base_url += '/'
         return [base_url + i for i in urls]
+
+
 
 class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
     '''
