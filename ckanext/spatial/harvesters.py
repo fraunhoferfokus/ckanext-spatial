@@ -56,7 +56,7 @@ from ckanext.spatial.lib.groupmap import Util
 from ckanext.spatial.validation import Validators, all_validators
 from ckanext.spatial.lib.durationmap import DurationTranslator
 
-from urllib2 import HTTPError
+from urllib2 import HTTPError, URLError
 from urlparse import urlparse
 
 log = logging.getLogger(__name__)
@@ -525,29 +525,40 @@ class GeminiHarvester(SpatialHarvester):
         if url.endswith(".pdf"):
             return True
         else:
-            req = urllib2.urlopen(url,timeout=10)
-            headers = req.headers['content-type']
-            #TODO application/octet-stream isbinary, accept as pdf?
-            return 'application/pdf' in headers
-
+            try:
+                req = urllib2.urlopen(url,timeout=10)
+                headers = req.headers['content-type']
+                #TODO application/octet-stream isbinary, accept as pdf?
+                return 'application/pdf' in headers
+            except HTTPError :
+                return False
+            except URLError :
+                return False
+            
     def _is_htm_or_html(self, url):
         if url.endswith('.htm') or url.endswith('html'):
             log.info("%s is html page" %url)
             return True
         else:
             log.info('try to open url: %s' %url)
-            req = urllib2.urlopen(url,timeout=10)
-            headers = req.headers['content-type']
-            if 'text/html' in headers:
-                log.info("%s is html page" %url)
-                return True
-
-
+            try:
+                req = urllib2.urlopen(url,timeout=10)
+                headers = req.headers['content-type']
+                if 'text/html' in headers:
+                    log.info("%s is html page" %url)
+                    return True
+            except HTTPError :
+                return False
+            except URLError :
+                return False
+            
     def _is_probably_wms(self, url):
         log.info('try to open url: %s' %url)
         try:
             urllib2.urlopen(url,timeout=10)
         except HTTPError :
+            return False
+        except URLError:
             return False
         else:
             # status code is 200
@@ -594,6 +605,8 @@ class GeminiHarvester(SpatialHarvester):
             for service_locator in service_locators:
                 url = service_locator.get('url', '')
                 if url:
+                    if not url.startswith('http://'):
+                        url = 'http://'+url
                     service_format = ''
                     resource = {}
                     if self._is_wms(url):
@@ -1673,11 +1686,11 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
             req.close()
 
         import zipfile
-        zipfile.ZipFile(tmpdir+self.zip_filename,"r").extractall(tmpdir+self.temp_directory)
+        zipfile.ZipFile(tmpdir + self.zip_filename, "r").extractall(tmpdir + self.temp_directory)
 
         ids = []
-        for xml_file in os.listdir(tmpdir+self.temp_directory):
-            obj = HarvestObject(guid = None, job = harvest_job)
+        for xml_file in os.listdir(tmpdir + self.temp_directory):
+            obj = HarvestObject(guid=None, job=harvest_job)
             obj.save()
             ids.append(obj.id)
 
@@ -1687,24 +1700,24 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
 
         return ids
 
-    def fetch_stage(self,harvest_object):
+    def fetch_stage(self, harvest_object):
 
         identifier = harvest_object.guid
         tmpdir = tempfile.gettempdir()
-        for xml_file in os.listdir(tmpdir+self.temp_directory):
+        for xml_file in os.listdir(tmpdir + self.temp_directory):
             try:
-                f = open(tmpdir + self.temp_directory+'/'+xml_file,"r")
+                f = open(tmpdir + self.temp_directory + '/' + xml_file, "r")
                 harvest_object.content = f.read()
                 harvest_object.save()
                 if(len(harvest_object.content) == 0):
-                    self._save_object_error('Empty record for GUID %s' % identifier,harvest_object)
+                    self._save_object_error('Empty record for GUID %s' % identifier, harvest_object)
                     return False
                 log.debug('XML content saved (len %s)', len(harvest_object.content))
                 # remove this xml file from temp dir
-                os.remove(tmpdir+self.temp_directory+"/"+xml_file)
+                os.remove(tmpdir + self.temp_directory + "/" + xml_file)
                 return True
             except Exception, e:
-                self._save_object_error('Error saving the harvest object for GUID %s [%r]' % (identifier,e),harvest_object)
+                self._save_object_error('Error saving the harvest object for GUID %s [%r]' % (identifier, e), harvest_object)
                 return False
             finally:
                 f.close()
@@ -1713,7 +1726,7 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
         '''Import stage of the Destatis Harvester'''
 
         log = logging.getLogger(__name__ + '.import')
-        #log.debug('Import stage for harvest object: %r', harvest_object)
+        # log.debug('Import stage for harvest object: %r', harvest_object)
         log.debug('Import stage for harvest object')
 
         if not harvest_object:
@@ -1724,10 +1737,10 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
         self.obj = harvest_object
 
         if harvest_object.content is None:
-            self._save_object_error('Empty content for object %s' % harvest_object.id,harvest_object,'Import')
+            self._save_object_error('Empty content for object %s' % harvest_object.id, harvest_object, 'Import')
             return False
         try:
-            self.import_inspire_object(harvest_object.content,harvest_object)
+            self.import_inspire_object(harvest_object.content, harvest_object)
             return True
         except Exception, e:
             log.error('Exception during import: %s' % text_traceback())
@@ -1742,13 +1755,13 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
     def _setup_csw_client(self, url):
         self.csw = CswService(url)
 
-    def handle_resources(self,resource_locators):
+    def handle_resources(self, resource_locators):
         ''' Handle all resources except for WMS endpoints for Destatis '''
         result = []
         if len(resource_locators):
-            log.info("Found %s resources" %len(resource_locators))
+            log.info("Found %s resources" % len(resource_locators))
             for resource_locator in resource_locators:
-                url = resource_locator.get('url','')
+                url = resource_locator.get('url', '')
                 if url:
                     resource_format = ''
                     resource = {}
@@ -1761,19 +1774,19 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
                     elif 'tabelleErgebnis' in url:
                         log.info("Found valid resource")
                         if url.endswith('.csv'):
-                            url = url.replace('tabelleErgebnis','tabelleDownload')[:-4] + '.csv'
+                            url = url.replace('tabelleErgebnis', 'tabelleDownload')[:-4] + '.csv'
                             resource_format = 'CSV'
                         elif url.endswith('.xls'):
-                            url = url.replace('tabelleErgebnis','tabelleDownload')[:-4] + '.xls'
+                            url = url.replace('tabelleErgebnis', 'tabelleDownload')[:-4] + '.xls'
                             resource_format = 'XLS'
                         elif url.endswith('.xml'):
-                            url = url.replace('tabelleErgebnis','tabelleDownload')[:-4] + '.xml'
+                            url = url.replace('tabelleErgebnis', 'tabelleDownload')[:-4] + '.xml'
                             resource_format = 'XML'
                         elif url.endswith('.html'):
-                            url = url.replace('tabelleErgebnis','tabelleDownload')[:-5] + '.xls'
+                            url = url.replace('tabelleErgebnis', 'tabelleDownload')[:-5] + '.xls'
                             resource_format = 'XLS'
                         else:
-                            url = url.replace('tabelleErgebnis','tabelleDownload') + '.xls'
+                            url = url.replace('tabelleErgebnis', 'tabelleDownload') + '.xls'
                             resource_format = 'XLS'
                     elif 'tabelleDownload' in url:
                         if url.endswith('.xml'):
@@ -1785,15 +1798,15 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
                                 'name': resource_format + ' - Ressource',
                                 'description': resource_format + ' - Ressource',
                                 'format': resource_format or None,
-                                'resource_locator_protocol': resource_locator.get('protocol',''),
-                                'resource_locator_function':resource_locator.get('function','')
-    
+                                'resource_locator_protocol': resource_locator.get('protocol', ''),
+                                'resource_locator_function':resource_locator.get('function', '')
+
                             })
                         result.append(resource)
                     else:
                         log.info("Weird Resource, write URL to file")
                         with open('Failed.txt', 'a') as f:
-                            f.write("Weird Resource: %s\n" %url)
+                            f.write("Weird Resource: %s\n" % url)
         return result
 
     def handle_licenses(self, gemini_values):
@@ -1825,25 +1838,83 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
             if x['key'] == 'metadata_original_id':
                 package_dict['url'] = x['value']
 
+
 class RegionalStatistikHarvester(DestatisHarvester, SingletonPlugin):
     '''
-    A Harvester for CSW servers, for targeted at import into the German Open Data Platform now focused on RegionalStatistik
+    A Harvester for CSW servers, for targeted at import into the German Open
+    Data Platform now focused on RegionalStatistik
     '''
     implements(IHarvester)
 
     temp_directory = '/temp_regio_dir'
-    zip_filename = '/file_destatis.zip'
-    
+    zip_filename = '/file_regio.zip'
+
     def info(self):
         return {
             'name': 'regionalstatistik',
             'title': 'RegionalStastik Harvester',
             'description': 'Harvester for CSW Servers, which return a zip file with xml files like RegionalStatistik'
-            }
+        }
 
     def handle_licenses(self, gemini_values):
-        license_dict = {'license_url':"https://www.regionalstatistik.de/genesis/online?Menu=Impressum",
-                        'license_id':'other-open',
-                        'other':u'Vervielfältigung und Verbreitung, auch auszugsweise, mit Quellenangabe gestattet.'}
-        
+        license_dict = {'license_url': "https://www.regionalstatistik.de/genesis/online?Menu=Impressum",
+                        'license_id': 'other-open',
+                        'other': u'Vervielfältigung und Verbreitung, auch auszugsweise, mit Quellenangabe gestattet.'}
+
         return license_dict
+
+    def handle_resources(self, resource_locators):
+        ''' Handle all resources except for WMS endpoints for Regionalstatistik '''
+        result = []
+        if len(resource_locators):
+            log.info("Found %s resources" % len(resource_locators))
+            for resource_locator in resource_locators:
+                url = resource_locator.get('url', '')
+                if url:
+                    resource_format = ''
+                    resource = {}
+                    if 'tabelleErgebnis' in url:
+                        log.info("Found valid resource")
+                        if url.endswith('.csv'):
+                            url = url.replace('tabelleErgebnis', 'tabelleDownload')[:-4] + '.csv'
+                            resource_format = 'CSV'
+                        elif url.endswith('.xls'):
+                            url = url.replace('tabelleErgebnis', 'tabelleDownload')[:-4] + '.xls'
+                            resource_format = 'XLS'
+                        elif url.endswith('.html'):
+                            url = url.replace('tabelleErgebnis', 'tabelleDownload')[:-5] + '.xls'
+                            resource_format = 'XLS'
+                        else:
+                            # create two new resources
+                            url = url.replace('tabelleErgebnis', 'tabelleDownload') + '.xls'
+                            resource_format = 'XLS'
+
+                            csv_resource = {'url': url[:-4] + '.csv',
+                                            'format': 'CSV',
+                                            'name': 'CSV - Ressource',
+                                            'description': 'CSV - Ressource',
+                                            'resource_locator_protocol': resource_locator.get('protocol', ''),
+                                            'resource_locator_function': resource_locator.get('function', '')
+                                            }
+
+                            result.append(csv_resource)
+                    if resource_format:
+                        resource.update(
+                            {
+                                'url': url,
+                                'name': resource_format + ' - Ressource',
+                                'description': resource_format + ' - Ressource',
+                                'format': resource_format or None,
+                                'resource_locator_protocol': resource_locator.get('protocol', ''),
+                                'resource_locator_function':resource_locator.get('function', '')
+
+                            })
+                        result.append(resource)
+                    else:
+                        log.info("Weird Resource, write URL to file")
+                        with open('Failed.txt', 'a') as f:
+                            f.write("Weird Resource: %s\n" % url)
+        return result
+
+    def handle_services(self, service_locators):
+        return []
