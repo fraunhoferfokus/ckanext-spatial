@@ -684,6 +684,7 @@ class GeminiHarvester(SpatialHarvester):
 
         reactivate_package = False
         if last_harvested_object:
+            log.info("Found previously run job for this harvest object")
             # We've previously harvested this (i.e. it's an update)
 
             # Use metadata modified date instead of content to determine if the package
@@ -963,7 +964,7 @@ class GeminiHarvester(SpatialHarvester):
         # remove duplicate items according to their URL
         seen = set()
         cleaned_list = []
-        for d in sorted(package_dict['resources'], key=lambda k:k.get('verified'), reverse=True):
+        for d in sorted(package_dict['resources'], key=lambda k: k.get('verified'), reverse=True):
             url = d['url']
             if url not in seen:
                 seen.add(url)
@@ -979,13 +980,12 @@ class GeminiHarvester(SpatialHarvester):
             if len(view_resources):
                 view_resources[0]['ckan_recommended_wms_preview'] = True
 
-
         extras_as_dict = []
-        for key,value in extras.iteritems():
-            if isinstance(value,(basestring,Number)):
-                extras_as_dict.append({'key':key,'value':value})
+        for key, value in extras.iteritems():
+            if isinstance(value, (basestring, Number)):
+                extras_as_dict.append({'key': key, 'value': value})
             else:
-                extras_as_dict.append({'key':key,'value':json.dumps(value, ensure_ascii = False)})
+                extras_as_dict.append({'key': key, 'value': json.dumps(value, ensure_ascii=False)})
 
         package_dict['extras'] = extras_as_dict
 
@@ -997,7 +997,7 @@ class GeminiHarvester(SpatialHarvester):
         else:
             is_a_document = True
             # check if any resource has a format not equal to 'PDf'
-            if [resource for resource in package_dict['resources'] if resource['format'] != 'PDF' ]:
+            if [resource for resource in package_dict['resources'] if resource['format'] != 'PDF']:
                 is_a_document = False
 
             if is_a_document or 'document' in gemini_values['resource-type']:
@@ -1020,9 +1020,9 @@ class GeminiHarvester(SpatialHarvester):
                     if m:
                         table_id = m.group(1)
                     if package_dict['url'].endswith('type=service'):
-                        name = 'destatis-service-'+table_id
+                        name = 'destatis-service-' + table_id
                     else:
-                        name = 'destatis-dataset-'+table_id
+                        name = 'destatis-dataset-' + table_id
                 else:
                     name = self.gen_new_name(gemini_values['title'])
                 if not name:
@@ -1647,7 +1647,8 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
 
     temp_directory = '/temp_destatis_dir'
     zip_filename = '/file_destatis.zip'
-    
+    force_import = True
+
     def info(self):
         return {
             'name': 'destatis',
@@ -1655,7 +1656,7 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
             'description': 'Harvester for CSW Servers, which return a zip file with xml files like Destatis'
             }
 
-    def gather_stage(self,harvest_job):
+    def gather_stage(self, harvest_job):
         log.debug('In DestatisHarvester gather_stage')
         # Get source URL
         url = harvest_job.source.url
@@ -1708,6 +1709,11 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
             try:
                 f = open(tmpdir + self.temp_directory + '/' + xml_file, "r")
                 harvest_object.content = f.read()
+                # we have to save the guid for this particular harvest object
+                gemini_document = InspireDocument(harvest_object.content)
+                gemini_values = gemini_document.read_values()
+                gemini_guid = gemini_values['guid']
+                harvest_object.guid = gemini_guid
                 harvest_object.save()
                 if(len(harvest_object.content) == 0):
                     self._save_object_error('Empty record for GUID %s' % identifier, harvest_object)
@@ -1906,7 +1912,7 @@ class RegionalStatistikHarvester(DestatisHarvester, SingletonPlugin):
                                 'description': resource_format + ' - Ressource',
                                 'format': resource_format or None,
                                 'resource_locator_protocol': resource_locator.get('protocol', ''),
-                                'resource_locator_function':resource_locator.get('function', '')
+                                'resource_locator_function': resource_locator.get('function', '')
 
                             })
                         result.append(resource)
