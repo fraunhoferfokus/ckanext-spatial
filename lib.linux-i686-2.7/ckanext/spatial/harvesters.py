@@ -816,15 +816,28 @@ class GeminiHarvester(SpatialHarvester):
         self.obj = harvest_object
         self.obj.save()
         
- 
+        
+        contains_author = False
+        contains_maintainer = False  
         for contact in contacts:
             if contact['role'] == 'veroeffentlichende_stelle':
                 package_dict['author'] = unicode(contact['name'])    
                 package_dict['author_email'] = contact['email']
+                contains_author = True                       
             if contact['role'] == 'ansprechpartner':
                 package_dict['maintainer'] = unicode(contact['name'])    
                 package_dict['maintainer_email'] = contact['email']
+                contains_maintainer = True
+                
+        if not contains_author:
+            package_dict['author'] = ''  
+            package_dict['author_email'] = ''  
+             
+        if not contains_maintainer:
+            package_dict['maintainer'] = ''   
+            package_dict['maintainer_email'] = ''
         
+       
        
         #type of the dataset 
         if 'application' in gemini_values['resource-type']:
