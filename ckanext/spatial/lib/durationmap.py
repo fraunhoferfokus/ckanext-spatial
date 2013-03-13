@@ -3,26 +3,48 @@ import re
 
 class DurationTranslator:
 
-    def translate_duration_data(self, duration):
+    def translate_duration_data(self,duration, duration_factor):
         
-        map = { 'daily' : 'tag',
-                'weekly' : 'woche',
-                'monthly' : 'monat',
-                'quarterly' : 'quartal',
-                'annually' : 'jahr',
-                'continual' : None,
-                'forthnightly' : None,
-                'biannually' : None,
-                'asNeeded' : None,
-                'irregular' : None,
-                'notPlanned' : None,
-                'unknown' :None
-              }
-  
-        out = None
-        if duration in map.keys():
-            out = map[duration]
-        return out
+        temp_duration = None
+        temp_factor = None
+        
+        if duration == 'forthnightly':
+                    temp_duration = 'tag'
+                    temp_factor = 14                    
+        elif duration == 'daily':  
+                    temp_duration = 'tag'
+                    temp_factor = 1             
+        elif duration == 'weekly':  
+                    temp_duration = 'woche'
+                    temp_factor = 1
+        elif duration == 'biannually':
+                    temp_duration = 'monat'
+                    temp_factor = 6 
+        elif duration == 'monthly':  
+                    temp_duration = 'monat'
+                    temp_factor = 1
+        elif duration == 'quarterly':  
+                    temp_duration = 'monat'
+                    temp_factor = 3
+        elif duration == 'annually':     
+                    temp_duration = 'jahr'
+                    temp_factor = 1        
+           
+        result = self.translate_duration_factor(duration_factor)
+        
+        
+        if temp_duration == result['duration']:
+            temp_factor =  result['duration_factor']  
+        elif result['duration'] and result['duration_factor'] :  
+            temp_duration = result['duration']
+            temp_factor =  result['duration_factor']  
+            
+        result = {'duration' :'', 'duration_factor' : '' } 
+        result['duration'] = temp_duration
+        result['duration_factor'] = temp_factor
+        
+        return result
+                    
     
     def translate_duration_factor(self, period):
         
@@ -64,38 +86,13 @@ class DurationTranslator:
                                 temp_factor = duration_factors['minutes']                                  
                             else:
                                 if duration_factors['days'] > 0:
-                                    duration = 'mekunde'
+                                    duration = 'sekunde'
                                     temp_factor = duration_factors['seconds']  
                             
         result['duration'] = duration
         result['duration_factor'] = temp_factor
         return result
-        
-        
-    
 
-
-import unittest
-class TestMapping(unittest.TestCase):
-
-    
-    def test_e2g(self):
-        u = DurationTranslator()
-        translated = u.translate_duration_data('weekly')
-        print translated
-        self.assertEqual(translated, 'woche')
-
-    def test_missing(self):
-        u = DurationTranslator()
-        translated = u.translate_duration_data(['biannually'])
-        print translated
-        self.assertEqual(translated, None)
-
-
-if __name__ == '__main__':
-    unittest.main()
-    
-    
 
 
 

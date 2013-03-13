@@ -621,38 +621,12 @@ class GeminiHarvester(SpatialHarvester):
         extras = {}
         #temporal granularity information
         duration_translator = DurationTranslator()      
-        temp_duration = ''
-        temp_factor = ''
-        duration = None
-        
-        if gemini_values.has_key('frequency-of-update'): 
-            temp_duration = duration_translator.translate_duration_data(gemini_values['frequency-of-update'])  
-            
-        if gemini_values.has_key('frequency-of-update-factor'):
-            duration = duration_translator.translate_duration_factor(gemini_values['frequency-of-update-factor'])
+        duration_data = duration_translator.translate_duration_data(gemini_values['frequency-of-update'], gemini_values['frequency-of-update-factor'])   
+        if duration_data['duration']:     
+             extras['temporal_granularity'] = duration_data['duration']
+        if duration_data['duration_factor']:
+             extras['temporal_granularity_factor'] = duration_data['duration_factor']
        
-        if temp_duration:
-            extras['temporal_granularity'] = temp_duration         
-            if duration:
-                if duration['duration'] == temp_duration:
-                    temp_factor =  duration['duration_factor']                
-        else:
-            if gemini_values['frequency-of-update'] == 'forthnightly':
-                    temp_duration = 'tag'
-                    temp_factor = 14   
-            else:
-                if gemini_values['frequency-of-update'] == 'biannually':
-                    temp_duration = 'monat'
-                    temp_factor = 6            
-                else:
-                    if duration:       
-                        temp_duration = duration['duration']
-                        temp_factor =  duration['duration_factor']                       
-        
-        if temp_duration:
-            extras['temporal_granularity'] = temp_duration 
-        if temp_factor:
-            extras['temporal_granularity_factor'] = temp_factor
                         
        
         #map given dates to OGPD date fields
@@ -723,12 +697,13 @@ class GeminiHarvester(SpatialHarvester):
                     contact['role'] = 'veroeffentlichende_stelle' 
                     if gemini_values['publisher-organisation-name']:
                                 contact['name'] = gemini_values['publisher-organisation-name']  
-                elif role == 'owner' or role == 'author':
+                elif role == 'author':
                     contact['role'] = 'autor'   
-                elif role == 'distributor' or role == 'resourceProvider':
+                elif role == 'distributor':
                     contact['role'] = 'vertrieb'       
                      
-                contacts.append(contact)   
+            if contact.has_key('role'):
+                contacts.append(contact)       
         
         extras['contacts'] = contacts
 
@@ -852,7 +827,7 @@ class GeminiHarvester(SpatialHarvester):
         
        
         #type of the dataset 
-        if 'application' in gemini_values['resource-type'] or 'service' in gemini_values['resource-type'] :
+        if 'application' in gemini_values['resource-type']:
             package_dict['type'] = 'app'      
         else:
             package_dict['type'] = 'datensatz'
