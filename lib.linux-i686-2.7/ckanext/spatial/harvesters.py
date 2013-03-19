@@ -988,26 +988,16 @@ class GeminiHarvester(SpatialHarvester):
         if not format_is_set:                   
             package_dict['resources'] = self.match_resource_format(package_dict['resources'], formats, used_formats)
 
-            
+        package_dict['resources'] = self.update_description(package_dict['resources']) 
 
-            # Guess the best view service to use in WMS preview
-            verified_view_resources = [r for r in package_dict['resources'] if 'verified' in r and r['format'] == 'WMS']
-            if len(verified_view_resources):
-                verified_view_resources[0]['ckan_recommended_wms_preview'] = True
-            else:
-                view_resources = [r for r in package_dict['resources'] if r['format'] == 'WMS']
-                if len(view_resources):
-                    view_resources[0]['ckan_recommended_wms_preview'] = True
-                    
-
-            # Guess the best view service to use in WMS preview
-            verified_view_resources = [r for r in package_dict['resources'] if 'verified' in r and r['format'] == 'WMS']
-            if len(verified_view_resources):
-                verified_view_resources[0]['ckan_recommended_wms_preview'] = True
-            else:
-                view_resources = [r for r in package_dict['resources'] if r['format'] == 'WMS']
-                if len(view_resources):
-                    view_resources[0]['ckan_recommended_wms_preview'] = True
+        # Guess the best view service to use in WMS preview
+        verified_view_resources = [r for r in package_dict['resources'] if 'verified' in r and r['format'] == 'WMS']
+        if len(verified_view_resources):
+            verified_view_resources[0]['ckan_recommended_wms_preview'] = True
+        else:
+            view_resources = [r for r in package_dict['resources'] if r['format'] == 'WMS']
+            if len(view_resources):
+                view_resources[0]['ckan_recommended_wms_preview'] = True
                     
                     
         #original metadata information  
@@ -1130,6 +1120,17 @@ class GeminiHarvester(SpatialHarvester):
             name = name.replace('--', '-')
         
         return name
+   
+   
+    def update_description(self, resources):
+         for resource in resources:
+            if resource['description'] == 'Ressource':
+                if resource['format']:
+                    if resource['type'] == 'api':
+                        resource['description'] = resource['format'] + '-' + 'Dienst'                
+                    else:   
+                        resource['description'] = resource['format'] + '-' + 'Ressource'          
+         return resources
    
    
     def _is_valid_URL(self,url):
@@ -1909,14 +1910,14 @@ class GeminiWafHarvester(GeminiHarvester, SingletonPlugin):
 
 class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
     '''
-    A Harvester for CSW servers, for targeted at import into the German Open Data Platform now focused on Geodatenkatalog-DE
-    '''
+A Harvester for CSW servers, for targeted at import into the German Open Data Platform now focused on Geodatenkatalog-DE
+'''
     implements(IHarvester)
     
     job = None
     related_data_ids=[]
     version = 'v1.0'
-    resource_formats = [] 
+    resource_formats = []
     service_formats = []
     
     def info(self):
@@ -1934,10 +1935,10 @@ class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
         try:
             dataset_formats = open('/opt/ckan/pyenv/src/ckan/formats/dataset_formats.json', 'r')
             self.resource_formats = json.loads(dataset_formats.read())
-            dataset_formats.close()    
+            dataset_formats.close()
         except Exception, e:
-            log.error('Error occurred while reading dataset formats: %r' %(os.getcwd()))   
-        try:  
+            log.error('Error occurred while reading dataset formats: %r' %(os.getcwd()))
+        try:
             app_formats = open('/opt/ckan/pyenv/src/ckan/formats/application_formats.json', 'r')
             self.service_formats = json.loads(app_formats.read())
             app_formats.close()
@@ -1950,7 +1951,7 @@ class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
         log.debug('In OGPDHarvester gather_stage')
         # Get source URL
         url = harvest_job.source.url
-        self.job = harvest_job 
+        self.job = harvest_job
         
         # Setup CSW client
         try:
@@ -2038,6 +2039,7 @@ class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
 
     def _setup_csw_client(self, url):
         self.csw = CswService(url)
+
 
 
 

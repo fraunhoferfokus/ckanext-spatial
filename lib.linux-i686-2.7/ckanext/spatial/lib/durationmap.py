@@ -3,7 +3,7 @@ import re
 
 class DurationTranslator:
 
-    def translate_duration_data(self,duration, duration_factor):
+    def translate_duration_data(self, duration, duration_factor):
         
         temp_duration = None
         temp_factor = None
