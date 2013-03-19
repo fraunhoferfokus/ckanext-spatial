@@ -44,7 +44,8 @@ class DurationTranslator:
         result['duration_factor'] = temp_factor
         
         return result
-                    
+           
+         
     
     def translate_duration_factor(self, period):
         

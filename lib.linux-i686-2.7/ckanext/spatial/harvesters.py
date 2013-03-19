@@ -854,7 +854,7 @@ class GeminiHarvester(SpatialHarvester):
         
         #copy license_id to ckan-core license id
         package_dict['license_id'] = extras['terms_of_use']['license_id']
-        #log.debug('Set license_id to %s' %package_dict['license_id'])
+        log.debug('Set license_id to %s' %package_dict['license_id'])
         
         #log.debug('Set groups to ' + str(package_dict['groups']))
 
@@ -897,7 +897,7 @@ class GeminiHarvester(SpatialHarvester):
         
         
         if len(service_locators):
-            #log.info("Found %s service points" % len(resource_locators))
+            log.info("Found %s service points" % len(resource_locators))
             for service_locator in service_locators:
                 url = service_locator.get('url', '')
                 if url:
@@ -946,7 +946,7 @@ class GeminiHarvester(SpatialHarvester):
         format_is_set = False
         if len(resource_locators):
             
-            #log.info("Found %s resources" %len(resource_locators))
+            log.info("Found %s resources" %len(resource_locators))
             for resource_locator in resource_locators:
                 url = resource_locator.get('url','')                
                 if url:
@@ -1109,8 +1109,7 @@ class GeminiHarvester(SpatialHarvester):
             self.obj.current = True
             self.obj.save()
     
-            #print 'End : ############################################################################################'
-
+       
             return package
        
    
@@ -1352,9 +1351,7 @@ class GeminiHarvester(SpatialHarvester):
 
 
     def harvest_individual_data(self,id,harvest_job):               
-        
-        #log.debug('RELATIONSHIP_REQUEST: %s', id)
-    
+            
         if id in self.related_data_ids:
                 
                 return None  
@@ -1402,7 +1399,6 @@ class GeminiHarvester(SpatialHarvester):
         else:       
      
             csw = CswService('http://hmdk.de/csw')
-            #csw = CswService('http://gateway.hamburg.de/OGCFassade/HH_CSW.aspx')
             data = csw.getrecordbyid([id])
             
             if data is None:
@@ -1910,8 +1906,8 @@ class GeminiWafHarvester(GeminiHarvester, SingletonPlugin):
 
 class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
     '''
-A Harvester for CSW servers, for targeted at import into the German Open Data Platform now focused on Geodatenkatalog-DE
-'''
+    A Harvester for CSW servers, for targeted at import into the German Open Data Platform now focused on Geodatenkatalog-DE
+    '''
     implements(IHarvester)
     
     job = None
@@ -2039,6 +2035,7 @@ A Harvester for CSW servers, for targeted at import into the German Open Data Pl
 
     def _setup_csw_client(self, url):
         self.csw = CswService(url)
+
 
 
 

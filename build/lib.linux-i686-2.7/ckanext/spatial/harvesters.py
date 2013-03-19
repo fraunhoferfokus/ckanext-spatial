@@ -566,6 +566,7 @@ class GeminiHarvester(SpatialHarvester):
 
         gemini_guid = gemini_values['guid']
         
+        package_exists = False
         self.related_data_ids.append(gemini_guid)
         #log.debug('RELATIONSHIP_PACKAGE: %s', gemini_guid)        
 
@@ -582,107 +583,55 @@ class GeminiHarvester(SpatialHarvester):
         self.obj.metadata_modified_date = metadata_modified_date
         self.obj.save()
 
-        last_harvested_object = Session.query(HarvestObject) \
-                            .filter(HarvestObject.guid==gemini_guid) \
-                            .filter(HarvestObject.current==True) \
-                            .all()
+        
+                
+        packages = []  
+        #name = self.gen_future_name(gemini_values['title'])
+        #like_q = u'%s%%' % name
+        pkg_query = Session.query(Package)
+                
+        for pkg in pkg_query:
+            try:
+                if pkg.extras['metadata_original_id'] == gemini_guid and pkg.state != u'deleted':
+                    packages.append(pkg)
+            except Exception, e:
+                log.debug('Guid check for %s failed with exception: %s' % (name, str(e)))
+                log.debug('Guid %s, metadata_original_id: %s' % (name, str(e)))
 
-        if len(last_harvested_object) == 1:
-            last_harvested_object = last_harvested_object[0]
-        elif len(last_harvested_object) > 1:
+                
+                          
+        last_harvested_package = None      
+        if len(packages) == 1:
+            last_harvested_package = packages[0]
+        elif len(packages) > 1:
                 raise Exception('Application Error: more than one current record for GUID %s' % gemini_guid)
-          
-        reactivate_package = False
-        if last_harvested_object:
-            
-            # We've previously harvested this (i.e. it's an update)
-
-            # Use metadata modified date instead of content to determine if the package
-            # needs to be updated
-            if last_harvested_object.metadata_modified_date is None \
-                or last_harvested_object.metadata_modified_date < self.obj.metadata_modified_date \
-                or self.force_import \
-                or (last_harvested_object.metadata_modified_date == self.obj.metadata_modified_date and
-                    last_harvested_object.source.active is False):
-
-                if self.force_import:
-                    log.info('Import forced for object %s with GUID %s' % (self.obj.id,gemini_guid))
-                else:
-                    log.info('Package for object with GUID %s needs to be created or updated' % gemini_guid)
-
-                package = last_harvested_object.package
-
-                # If the package has a deleted state, we will only update it and reactivate it if the
-                # new document has a more recent modified date
-                if package.state == u'deleted':
-                    if last_harvested_object.metadata_modified_date < self.obj.metadata_modified_date:
-                        #log.info('Package for object with GUID %s will be re-activated' % gemini_guid)
-                        reactivate_package = True
-                    else:
-                         #log.info('Remote record with GUID %s is not more recent than a deleted package, skipping... ' % gemini_guid)
-                         return None
-
-            else:
-                #log.info('Document with GUID %s unchanged, skipping...' % (gemini_guid))
-                return None
+                  
+        
+        if last_harvested_package:
+            log.info('Package for object with GUID %s needs to be updated' % gemini_guid)
+            package_exists = True
+            package = last_harvested_package
+                
         else:
             log.info('No package with INSPIRE guid %s found, let''s create one' % gemini_guid)
 
+        
+        reactivate_package = False
+        
         extras = {}
-
-        
-        
-            
-        #if gemini_values['coupled-resource']:
-        #    extras['used_datasets'] = []
-        #    for res in gemini_values['coupled-resource']:
-        #        extras['used_datasets'].append(res['uuid'][0])        
-       
-
-       
         #temporal granularity information
         duration_translator = DurationTranslator()      
-        temp_duration = ''
-        temp_factor = ''
-        duration = None
-        
-        if gemini_values.has_key('frequency-of-update'): 
-            temp_duration = duration_translator.translate_duration_data(gemini_values['frequency-of-update'])  
-            
-        if gemini_values.has_key('frequency-of-update-factor'):
-            duration = duration_translator.translate_duration_factor(gemini_values['frequency-of-update-factor'])
+        duration_data = duration_translator.translate_duration_data(gemini_values['frequency-of-update'], gemini_values['frequency-of-update-factor'])   
+        if duration_data['duration']:     
+             extras['temporal_granularity'] = duration_data['duration']
+        if duration_data['duration_factor']:
+             extras['temporal_granularity_factor'] = duration_data['duration_factor']
        
-        if temp_duration:
-            extras['temporal_granularity'] = temp_duration         
-            if duration:
-                if duration['duration'] == temp_duration:
-                    temp_factor =  duration['duration_factor']                
-        else:
-            if gemini_values['frequency-of-update'] == 'forthnightly':
-                    temp_duration = 'tag'
-                    temp_factor = 14   
-            else:
-                if gemini_values['frequency-of-update'] == 'biannually':
-                    temp_duration = 'monat'
-                    temp_factor = 6            
-                else:
-                    if duration:       
-                        temp_duration = duration['duration']
-                        temp_factor =  duration['duration_factor']                       
-        
-        if temp_duration:
-            extras['temporal_granularity'] = temp_duration 
-        if temp_factor:
-            extras['temporal_granularity_factor'] = temp_factor
                         
        
         #map given dates to OGPD date fields
               
         dates = []    
-        
-        #release_dates_combined = []
-        #release_dates_combined.append(gemini_values['metadata-date'])
-        #release_dates_combined = release_dates_combined + gemini_values['date-released']
         
         release_dates = self.get_dates(gemini_values['date-released'], u'veroeffentlicht')
         creation_dates = self.get_dates(gemini_values['date-created'], u'erstellt')
@@ -693,9 +642,9 @@ class GeminiHarvester(SpatialHarvester):
         extras['dates']= dates 
  
  
- 
-        extras['subgroups'] = gemini_values['topic-category']
-        #log.debug('Set subgroups: ' + str(gemini_values['topic-category']))
+        if len(gemini_values['topic-category']) > 0:
+            extras['subgroups'] = gemini_values['topic-category']
+            log.debug('Set subgroups: ' + str(gemini_values['topic-category']))
 
 
 
@@ -714,14 +663,11 @@ class GeminiHarvester(SpatialHarvester):
                 return None
 
         extras['terms_of_use'] = terms_of_use
-        
-        
-        
+
+
         # map INSPIRE responsible organisation fields to OGPD contacts
-
-        roles = ['publisher', 'owner', 'author', 'distributer', 'custodian', 'pointOfContact']
+        roles = ['publisher', 'owner', 'author', 'distributor', 'pointOfContact', 'resourceProvider']
         contacts = []
-
         for role in roles:
             contact = {}
             if gemini_values.has_key(role + '-email') and gemini_values[role + '-email']: 
@@ -736,44 +682,29 @@ class GeminiHarvester(SpatialHarvester):
                 else:
                     if gemini_values.has_key(role + '-organisation-name'):
                         contact['name'] = gemini_values[role + '-organisation-name']
+                    else:
+                        if gemini_values.has_key(role + '-position-name'):
+                            contact['name'] = gemini_values[role + '-position-name']
                     
             if gemini_values.has_key(role + '-address') and gemini_values[role + '-address']:
                 contact['address'] = gemini_values[role + '-address']
 
 
-
-            if len(contact) != 0:
-                if role == 'custodian': 
-                    contact['role'] = 'ansprechpartner'                     
+            if len(contact) != 0:                    
                 if role == 'pointOfContact':
-                    if gemini_values['pointOfContact-individual-name']:
-                        contact['role'] = 'ansprechpartner'
-                    else:
-                        contact['role'] = 'veroeffentlichende_stelle'
-                        contact['name'] = gemini_values['pointOfContact-organisation-name']              
-                else:                 
-                    if role == 'owner' or role == 'author':
-                        contact['role'] = 'autor'              
-                    else:                     
-                        if role == 'publisher':
-                            contact['role'] = 'veroeffentlichende_stelle'
-                            if gemini_values['pointOfContact-organisation-name']:
-                                contact['name'] = gemini_values['pointOfContact-organisation-name']
-                        else:                        
-                            if role == 'distributer' or role == 'resourceProvider':
-                                contact['role'] = 'vertrieb'  
-                        
-                if len(contacts) > 0:
-                    contains_role = False
-                    for c in contacts:
-                        if c['role'] == contact['role']: 
-                                contains_role = True
-                                break
-                    if not contains_role:
-                        contacts.append(contact)
-                else:
-                    contacts.append(contact)
-
+                    contact['role'] = 'ansprechpartner'   
+                elif role == 'publisher':
+                    contact['role'] = 'veroeffentlichende_stelle' 
+                    if gemini_values['publisher-organisation-name']:
+                                contact['name'] = gemini_values['publisher-organisation-name']  
+                elif role == 'author':
+                    contact['role'] = 'autor'   
+                elif role == 'distributor':
+                    contact['role'] = 'vertrieb'       
+                     
+            if contact.has_key('role'):
+                contacts.append(contact)       
+        
         extras['contacts'] = contacts
 
         # Construct a GeoJSON extent so ckanext-spatial can register the extent geometry
@@ -885,31 +816,31 @@ class GeminiHarvester(SpatialHarvester):
         self.obj = harvest_object
         self.obj.save()
         
-        #set the core ckan fields maintainer and author
-        if  gemini_values.has_key('pointOfContact-email'):
-            package_dict['maintainer_email'] = gemini_values['pointOfContact-email']
-            
-        if gemini_values.has_key('pointOfContact-individual-name'):
-            package_dict['maintainer'] = gemini_values['pointOfContact-individual-name']
-            
-        else:
-            if gemini_values.has_key('pointOfContact-organisation-name'):
-                package_dict['maintainer'] = gemini_values['pointOfContact-organisation-name']
         
+        contains_author = False
+        contains_maintainer = False  
+        for contact in contacts:
+            if contact['role'] == 'veroeffentlichende_stelle':
+                package_dict['author'] = unicode(contact['name'])    
+                package_dict['author_email'] = contact['email']
+                contains_author = True                       
+            if contact['role'] == 'ansprechpartner':
+                package_dict['maintainer'] = unicode(contact['name'])    
+                package_dict['maintainer_email'] = contact['email']
+                contains_maintainer = True
+                
+        if not contains_author:
+            package_dict['author'] = ''  
+            package_dict['author_email'] = ''  
+             
+        if not contains_maintainer:
+            package_dict['maintainer'] = ''   
+            package_dict['maintainer_email'] = ''
         
-        if  gemini_values.has_key('author-email'):
-            package_dict['author_email'] = gemini_values['author-email']
-        
-        if  gemini_values.has_key('author-individual-name'):
-            package_dict['author'] = gemini_values['author-individual-name']
-            
-        else:
-            if gemini_values.has_key('author-organisation-name'):
-                package_dict['author'] = gemini_values['author-organisation-name']
-            
-        
+       
+       
         #type of the dataset 
-        if 'application' in gemini_values['resource-type'] or 'service' in gemini_values['resource-type'] :
+        if 'application' in gemini_values['resource-type']:
             package_dict['type'] = 'app'      
         else:
             package_dict['type'] = 'datensatz'
@@ -923,7 +854,7 @@ class GeminiHarvester(SpatialHarvester):
         
         #copy license_id to ckan-core license id
         package_dict['license_id'] = extras['terms_of_use']['license_id']
-        #log.debug('Set license_id to %s' %package_dict['license_id'])
+        log.debug('Set license_id to %s' %package_dict['license_id'])
         
         #log.debug('Set groups to ' + str(package_dict['groups']))
 
@@ -934,15 +865,20 @@ class GeminiHarvester(SpatialHarvester):
         if reactivate_package:
             package_dict['state'] = u'active'
 
-        if package is None or package.title != gemini_values['title']:
-            name = self.gen_new_name(gemini_values['title'])
-            if not name:
-                name = self.gen_new_name(str(gemini_guid))
-            if not name:
-                raise Exception('Could not generate a unique name from the title or the GUID. Please choose a more unique title.')
-            package_dict['name'] = name
-        else:
+        
+        if package is not None:
             package_dict['name'] = package.name
+
+        else:
+            if package is None or package.title != gemini_values['title']:
+                name = self.gen_new_name(gemini_values['title'])
+                if not name:
+                    name = self.gen_new_name(str(gemini_guid))
+                if not name:
+                    raise Exception('Could not generate a unique name from the title or the GUID. Please choose a more unique title.')
+                package_dict['name'] = name
+            else:
+                package_dict['name'] = package.name
 
         resource_locators = gemini_values.get('resource-locator', [])
         service_locators = gemini_values.get('service-locator', [])
@@ -961,7 +897,7 @@ class GeminiHarvester(SpatialHarvester):
         
         
         if len(service_locators):
-            #log.info("Found %s service points" % len(resource_locators))
+            log.info("Found %s service points" % len(resource_locators))
             for service_locator in service_locators:
                 url = service_locator.get('url', '')
                 if url:
@@ -1010,7 +946,7 @@ class GeminiHarvester(SpatialHarvester):
         format_is_set = False
         if len(resource_locators):
             
-            #log.info("Found %s resources" %len(resource_locators))
+            log.info("Found %s resources" %len(resource_locators))
             for resource_locator in resource_locators:
                 url = resource_locator.get('url','')                
                 if url:
@@ -1052,31 +988,16 @@ class GeminiHarvester(SpatialHarvester):
         if not format_is_set:                   
             package_dict['resources'] = self.match_resource_format(package_dict['resources'], formats, used_formats)
 
-            
+        package_dict['resources'] = self.update_description(package_dict['resources']) 
 
-            # Guess the best view service to use in WMS preview
-            verified_view_resources = [r for r in package_dict['resources'] if 'verified' in r and r['format'] == 'WMS']
-            if len(verified_view_resources):
-                verified_view_resources[0]['ckan_recommended_wms_preview'] = True
-            else:
-                view_resources = [r for r in package_dict['resources'] if r['format'] == 'WMS']
-                if len(view_resources):
-                    view_resources[0]['ckan_recommended_wms_preview'] = True
-                    
-       
-       
-       
-       
-       
-
-            # Guess the best view service to use in WMS preview
-            verified_view_resources = [r for r in package_dict['resources'] if 'verified' in r and r['format'] == 'WMS']
-            if len(verified_view_resources):
-                verified_view_resources[0]['ckan_recommended_wms_preview'] = True
-            else:
-                view_resources = [r for r in package_dict['resources'] if r['format'] == 'WMS']
-                if len(view_resources):
-                    view_resources[0]['ckan_recommended_wms_preview'] = True
+        # Guess the best view service to use in WMS preview
+        verified_view_resources = [r for r in package_dict['resources'] if 'verified' in r and r['format'] == 'WMS']
+        if len(verified_view_resources):
+            verified_view_resources[0]['ckan_recommended_wms_preview'] = True
+        else:
+            view_resources = [r for r in package_dict['resources'] if r['format'] == 'WMS']
+            if len(view_resources):
+                view_resources[0]['ckan_recommended_wms_preview'] = True
                     
                     
         #original metadata information  
@@ -1094,6 +1015,14 @@ class GeminiHarvester(SpatialHarvester):
         extras['sector'] = 'oeffentlich'
         
 
+        if package_exists:
+            # copy each new added field
+            for key,value in package.extras.iteritems():
+                if key not in extras.keys():
+                    log.debug('Found a new added key: %s', key)
+                    extras[key] = value 
+                
+            
         extras_as_dict = []
         for key,value in extras.iteritems():
             if isinstance(value,(basestring,Number)):
@@ -1111,8 +1040,10 @@ class GeminiHarvester(SpatialHarvester):
             return None
 
         else:
-            
-            if package == None:
+            if package_exists:
+                package = self._create_package_from_data(package_dict, package = package)
+                #log.info('Updated existing package ID %s with existing GEMINI guid %s', package['id'], gemini_guid)  
+            elif package == None:
                 # Create new package from data.
                 package = self._create_package_from_data(package_dict)
                 #log.info('Created new package ID %s with GEMINI guid %s', package['id'], gemini_guid)
@@ -1120,9 +1051,8 @@ class GeminiHarvester(SpatialHarvester):
                 package = self._create_package_from_data(package_dict, package = package)
                 #log.info('Updated existing package ID %s with existing GEMINI guid %s', package['id'], gemini_guid)
     
+    
             # add relationships between datasets
-            
-            
             theparent = model.Package.by_name(name=package_dict['name'])
             for d in used_datasets_id:
                 thechild = model.Package.by_name(name=d)
@@ -1179,13 +1109,28 @@ class GeminiHarvester(SpatialHarvester):
             self.obj.current = True
             self.obj.save()
     
-            #print 'End : ############################################################################################'
-
+       
             return package
        
-
-
-
+   
+    def gen_future_name(self, title):
+        name = munge_title_to_name(title).replace('_', '-')
+        while '--' in name:
+            name = name.replace('--', '-')
+        
+        return name
+   
+   
+    def update_description(self, resources):
+         for resource in resources:
+            if resource['description'] == 'Ressource':
+                if resource['format']:
+                    if resource['type'] == 'api':
+                        resource['description'] = resource['format'] + '-' + 'Dienst'                
+                    else:   
+                        resource['description'] = resource['format'] + '-' + 'Ressource'          
+         return resources
+   
    
     def _is_valid_URL(self,url):
         '''
@@ -1406,9 +1351,7 @@ class GeminiHarvester(SpatialHarvester):
 
 
     def harvest_individual_data(self,id,harvest_job):               
-        
-        #log.debug('RELATIONSHIP_REQUEST: %s', id)
-    
+            
         if id in self.related_data_ids:
                 
                 return None  
@@ -1455,8 +1398,7 @@ class GeminiHarvester(SpatialHarvester):
  
         else:       
      
-            #csw = CswService('http://hmdk.de/csw')
-            csw = CswService('http://gateway.hamburg.de/OGCFassade/HH_CSW.aspx')
+            csw = CswService('http://hmdk.de/csw')
             data = csw.getrecordbyid([id])
             
             if data is None:
@@ -1536,7 +1478,6 @@ class GeminiHarvester(SpatialHarvester):
                 'Transport und Verkehr'                        : 'transport-verkehr',
                 'Umwelt und Klima'                             : 'umwelt-klima',
                 'Verbraucherschutz'                            : 'verbraucherschutz',
-               u'Öfentliche Verwaltung, Haushalt und Steuern'  : 'verwaltung',
                 'Wirtschaft und Arbeit'                        : 'wirtschaft-arbeit'
               }
   
@@ -1550,57 +1491,9 @@ class GeminiHarvester(SpatialHarvester):
                 if 'lkerung' in group:
                     out = 'bevoelkerung' 
         return out
-    
-    
-    
-    def _create_group(self, group_name):
-          
 
-        group_schema = logic.schema.default_group_schema()
-        
-        debug_exception_mode = bool(os.getenv('DEBUG'))
-        
-        context = {'model':model,
-                      'session':Session,
-                      'user':'harvest',
-                      'schema':group_schema,
-                      'extras_as_string':False,
-                      'api_version': '2'}
-        
-        group_dict = {'name': unicode(group_name)}
-        groups = Session.query(model.Group.name).autoflush(False).filter_by(name=group_name)
-        result = groups.first()
-         
-        
-        if not result:
-                action_function = get_action('group_create')
-        
-                try:
-                    group_dict = action_function(context, group_dict)
-                    return group_dict
-        
-                except ValidationError,e:
-                    raise Exception('Validation Error: %s %s' % (group_name,str(e.error_summary)))
-                    if debug_exception_mode:
-                            raise
 
-        
-    def fetch_and_import_used_dataset(self,harvest_object):
-        
-        package = None
-        
-        if OGPDHarvester.fetch_stage(self, harvest_object):
-            package = OGPDHarvester.import_stage(self, harvest_object)
-            
-        return package 
-        
-    def get_future_name(self,title):   
-        name = munge_title_to_name(title).replace('_', '-')
-        while '--' in name:
-            name = name.replace('--', '-')
-        return name
 
-        
     def gen_new_name(self, title):
         name = munge_title_to_name(title).replace('_', '-')
         while '--' in name:
@@ -1624,8 +1517,7 @@ class GeminiHarvester(SpatialHarvester):
             if o.scheme and o.netloc:
                 return licence
         return None
-    
-    
+  
     
     def _create_related_item(self, related_dict):
         
@@ -1636,7 +1528,6 @@ class GeminiHarvester(SpatialHarvester):
                    'extras_as_string':True,
                    'api_version': '2'}
         
-
         try:
             action_function = get_action('related_create')      
             related_dict = action_function(context, related_dict)
@@ -2011,6 +1902,8 @@ class GeminiWafHarvester(GeminiHarvester, SingletonPlugin):
         base_url += '/'
         return [base_url + i for i in urls]
 
+
+
 class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
     '''
     A Harvester for CSW servers, for targeted at import into the German Open Data Platform now focused on Geodatenkatalog-DE
@@ -2020,7 +1913,7 @@ class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
     job = None
     related_data_ids=[]
     version = 'v1.0'
-    resource_formats = [] 
+    resource_formats = []
     service_formats = []
     
     def info(self):
@@ -2034,28 +1927,27 @@ class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
     def read_formats(self):
             
         import json
-        
+        import os
         try:
-            dataset_formats = open('formats/dataset_formats.json', 'r')
+            dataset_formats = open('/opt/ckan/pyenv/src/ckan/formats/dataset_formats.json', 'r')
             self.resource_formats = json.loads(dataset_formats.read())
             dataset_formats.close()
         except Exception, e:
-            log.error('Error occurred while reading dataset formats: %r' %e)
-            
-        try:  
-            app_formats = open('formats/application_formats.json', 'r')
+            log.error('Error occurred while reading dataset formats: %r' %(os.getcwd()))
+        try:
+            app_formats = open('/opt/ckan/pyenv/src/ckan/formats/application_formats.json', 'r')
             self.service_formats = json.loads(app_formats.read())
             app_formats.close()
         
         except Exception, e:
-            log.error('Error occurred while reading application formats %r' %e)
+            log.error('Error occurred while reading application formats %r' %(os.getcwd()))
     
     
     def gather_stage(self,harvest_job):
-        #log.debug('In OGPDHarvester gather_stage')
+        log.debug('In OGPDHarvester gather_stage')
         # Get source URL
         url = harvest_job.source.url
-        self.job = harvest_job 
+        self.job = harvest_job
         
         # Setup CSW client
         try:
@@ -2143,6 +2035,8 @@ class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
 
     def _setup_csw_client(self, url):
         self.csw = CswService(url)
+
+
 
 
 
