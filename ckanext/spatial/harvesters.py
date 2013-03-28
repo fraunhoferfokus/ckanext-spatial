@@ -927,7 +927,7 @@ class GeminiHarvester(SpatialHarvester):
                             {
                                 'url': url,
                                 'name': service_locator.get('name',''),
-                                'description':  service_locator.get('description') if service_locator.get('description') else 'Ressource',
+                                'description':  service_locator.get('description') if service_locator.get('description') and not format_is_set else 'Ressource',
                                 'format':service_format or None,
                                 'type' : 'api',
                                 'resource_locator_protocol': service_locator.get('protocol',''),
@@ -963,9 +963,9 @@ class GeminiHarvester(SpatialHarvester):
                         if resource_des:
                             if 'Format:' in resource_des:
                                     format_is_set = True
-                                    for resource in self.resource_formats:
-                                        if resource in resource_des.upper():
-                                            resource_format = resource
+                                    for resource_f in self.resource_formats:
+                                        if resource_f in resource_des.upper():
+                                            resource_format = resource_f
                             else:       
                                 resource_format = self.get_data_format_from_url(url)   
                         else:
@@ -976,7 +976,7 @@ class GeminiHarvester(SpatialHarvester):
                             {
                                 'url': url,
                                 'name': resource_locator.get('name',''),
-                                'description': resource_locator.get('description') if resource_locator.get('description') else 'Ressource',
+                                'description': resource_locator.get('description') if resource_locator.get('description') and not format_is_set else 'Ressource',
                                 'format': resource_format or None,
                                 'type' : 'file',
                                 'resource_locator_protocol': resource_locator.get('protocol',''),
@@ -1169,16 +1169,53 @@ class GeminiHarvester(SpatialHarvester):
         This method checks whether a similar version of a url is 
         already presented in the list of services.
         '''
+        
+        longest_url = self.get_url_with_longest_query(url, services)
+                    
+        if longest_url == url:
+            return False
+        
+        else:
+            url_schema = urlparse(url)
+            if len(services):
+                for service in services:
+                    current_url = service.get('url', '')
+                    
+                    if current_url != url:
+                        current_url_schema = urlparse(current_url)
+          
+                        if current_url_schema.path == url_schema.path:
+                            if len(url_schema.query) < len(current_url_schema.query):
+                                if not url_schema.query or url_schema.query.lower().startswith('version='):
+                                    return True
+                            else:
+                                if not current_url_schema.query or current_url_schema.query.lower().startswith('version='):                         
+                                    return True
+        
+        return False
+
+
+    
+    def get_url_with_longest_query(self, url, services):
+        original_url = url
         url_schema = urlparse(url)
         if len(services):
             for service in services:
                 current_url = service.get('url', '')
+                
                 if current_url != url:
                     current_url_schema = urlparse(current_url)
-        
-                    if current_url_schema.path == url_schema.path and not url_schema.query or url_schema.query.startswith('version='):
-                        return True
-        return False
+                    
+                    if current_url_schema.path == url_schema.path and (not url_schema.query or not current_url_schema.query or url_schema.query.lower().startswith('version=') or current_url_schema.query.lower().startswith('version=')):
+                        if len(url_schema.query) < len(current_url_schema.query):
+                            url = current_url
+        if original_url != url:   
+            return None
+        else:
+            return url   
+
+
+
   
     def find_services_in_resources(self,services, resources):
         '''
@@ -1343,6 +1380,8 @@ class GeminiHarvester(SpatialHarvester):
             resource = 'XLS'
         elif url.endswith('.txt'):
             resource = 'TXT'
+        elif url.endswith('.csv'):
+            resource = 'CSV'
         else:
             resource = 'WEB'
         
