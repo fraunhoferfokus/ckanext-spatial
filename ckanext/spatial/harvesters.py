@@ -1296,17 +1296,13 @@ class GeminiHarvester(SpatialHarvester):
             except:
                 print f
         
-        copied_resources = []
         if len(formats)>0:
                 for f in formats:
-                    if 'TIF' in f:
+                    if 'TIF' or 'TIFF' in f:
                         for resource in resources:
                             if resource['format']:
-                                if resource['format'] == 'JPEG':
-                                    resource_copy = copy.deepcopy(resource)
-                                    resource_copy['format'] = 'TIFF'
-                                    copied_resources.append(resource_copy)
-                                    resource['format'] = self.validate_resource('TIF')
+                                if resource['format'] == 'JPEG' and 'JPEG' not in found_formats:
+                                    resource['format'] = self.validate_resource('TIF')           
                            
                     else:                    
                         for resource in resources:
@@ -1314,13 +1310,10 @@ class GeminiHarvester(SpatialHarvester):
                                 if 'ZIP' in resource['format'] or 'WEB' in resource['format'] or 'HTML' in resource['format']:
                                     resource['format'] = self.validate_resource(f)
                             else:
-                                resource['format'] = self.validate_resource(f)
-                                    
-                            
-        for resource in copied_resources:
-                    resources.append(resource) 
+                                resource['format'] = self.validate_resource(f)                                  
                    
         return resources 
+  
   
     def get_service_name_from_url(self, url):
         '''
@@ -1376,6 +1369,8 @@ class GeminiHarvester(SpatialHarvester):
             resource = 'HTML'
         elif url.endswith('.jpg'):
             resource = 'JPEG'
+        elif url.endswith('.tif') or url.endswith('.tiff'):
+            resource = 'TIF'
         elif url.endswith('.xls'):
             resource = 'XLS'
         elif url.endswith('.txt'):
