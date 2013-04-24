@@ -595,8 +595,8 @@ class GeminiHarvester(SpatialHarvester):
                 if pkg.extras['metadata_original_id'] == gemini_guid and pkg.state != u'deleted':
                     packages.append(pkg)
             except Exception, e:
-                log.debug('Guid check for %s failed with exception: %s' % (name, str(e)))
-                log.debug('Guid %s, metadata_original_id: %s' % (name, str(e)))
+                log.debug('Guid check for %s failed with exception: %s' % (gemini_guid, str(e)))
+                log.debug('Guid %s, metadata_original_id: %s' % (gemini_guid, str(e)))
 
                 
                           
@@ -1298,22 +1298,22 @@ class GeminiHarvester(SpatialHarvester):
         
         if len(formats)>0:
                 for f in formats:
-                    if 'TIF' or 'TIFF' in f:
+                    if 'TIF' in f or 'TIFF' in f:            
                         for resource in resources:
                             if resource['format']:
                                 if resource['format'] == 'JPEG' and 'JPEG' not in found_formats:
                                     resource['format'] = self.validate_resource('TIF')           
-                           
-                    else:                    
+                    else:                  
                         for resource in resources:
-                            if resource['format']:              
-                                if 'ZIP' in resource['format'] or 'WEB' in resource['format'] or 'HTML' in resource['format']:
+                            if resource['format']:
+                                             
+                                if 'ZIP' in resource['format'] or 'DATA' in resource['format'] or 'HTML' in resource['format']:
                                     resource['format'] = self.validate_resource(f)
                             else:
-                                resource['format'] = self.validate_resource(f)                                  
-                   
-        return resources 
-  
+                                resource['format'] = self.validate_resource(f)
+             
+        return resources  
+
   
     def get_service_name_from_url(self, url):
         '''
@@ -1331,11 +1331,14 @@ class GeminiHarvester(SpatialHarvester):
             service = 'WMS'
         elif url.endswith('.zip'):
             service = 'ZIP'
-
-        if service:
-            return self.validate_resource(service)
+        elif 'WMS' in url:
+            service = 'WMS'
+        elif 'WFS' in url:
+            service = 'WFS'
+        else:
+            service = 'WEB'   
         
-        return None
+        return self.validate_resource(service)
   
     def get_data_format_from_inspire(self, data_formats):
         '''
@@ -1378,7 +1381,7 @@ class GeminiHarvester(SpatialHarvester):
         elif url.endswith('.csv'):
             resource = 'CSV'
         else:
-            resource = 'WEB'
+            resource = 'DATA'
         
         return self.validate_resource(resource)
    
