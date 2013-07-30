@@ -2259,3 +2259,115 @@ class LowerSaxonyHarvester(GeminiCswHarvester, SingletonPlugin):
             license_dict = licenses.translate_license_data(gemini_values)
                                                                      
         return license_dict
+    
+    
+    def handle_resources(self, resource_locators):
+        ''' Handle all resources except for WMS endpoints for Regionalstatistik '''
+        result = []
+        if len(resource_locators):
+            log.info("Found %s resources" % len(resource_locators))
+            for resource_locator in resource_locators:
+                url = resource_locator.get('url', '')
+                is_service = False
+                if url:
+                    resource_format = ''
+                    resource = {}
+                    log.info("Found valid resource")
+                    if url.endswith('.csv'):
+                        resource_format = 'CSV'
+                    elif url.endswith('.xls'):
+                        resource_format = 'XLS'
+                    elif url.endswith('.zip'):
+                        resource_format = 'ZIP'
+                    elif url.endswith('.tml'):
+                        resource_format = 'TML'
+                    elif url.endswith('.xml'):
+                        resource_format = 'XML'
+                    elif url.endswith('.tif'):
+                        resource_format = 'TIF'
+                    elif url.endswith('.txt'):
+                        resource_format = 'TXT'
+                    elif 'service=' in url.lower():         
+                        m = re.search('\S+service=(\w+)&\S+', url.lower())
+                        resource_format = m.group(1)
+                        is_service = True
+                    elif url.endswith('?wms'):
+                        resource_format = 'WMS'
+                        is_service = True
+                    elif url.endswith('?wfs'):
+                        resource_format = 'WFS'
+                        is_service = True 
+                    else:
+                        resource_format = 'HTML'
+  
+      
+                if resource_format:                   
+                    resource.update(
+                        {
+                            'url': url,
+                            'name': resource_locator.get('name', ''),
+                            'format': resource_format or None,
+                            'resource_locator_protocol': resource_locator.get('protocol', ''),
+                            'resource_locator_function': resource_locator.get('function', '')
+
+                        })   
+                    if is_service:
+                            resource['description'] = resource_locator.get('description') if resource_locator.get('description') else  resource_format + ' - Service',
+                    else:
+                        resource['description'] = resource_locator.get('description') if resource_locator.get('description') else  resource_format + ' - Resource',                                 
+                    
+                    
+                    if resource not in result:
+                        result.append(resource)
+
+                   
+        return result
+    
+    
+    def handle_services(self, service_locators):
+        ''' Handle all services'''
+        result = []
+        if len(service_locators):
+            log.info("Found %s resources" % len(service_locators))
+            for service_locator in service_locators:
+                url = service_locator.get('url', '')
+                if url:
+                    service_format = ''
+                    resource = {}
+                    log.info("Found valid resource")
+                    if url.endswith('.xml'):
+                        service_format = 'XML'
+                    elif 'service=' in url.lower():         
+                        m = re.search('\S+service=(\w+)&\S+', url.lower())
+                        service_format = m.group(1)
+                    elif url.endswith('csw'):
+                        service_format = 'CSW'
+                    elif url.endswith('?wms'):
+                        service_format = 'WMS'
+                    elif url.endswith('?wfs'):
+                        service_format = 'WFS'
+                    elif 'wmsserver' in url.lower():
+                        service_format = 'WMS'
+                    elif 'csw' in url.lower():
+                        service_format = 'CSW'    
+
+   
+                if service_format:                   
+                    resource.update(
+                        {
+                            'url': url,
+                            'name': service_locator.get('name', ''),
+                            'format': service_format or None,
+                            'description' : service_locator.get('description') if service_locator.get('description') else  service_format + ' - Service',
+                            'resource_locator_protocol': service_locator.get('protocol', ''),
+                            'resource_locator_function': service_locator.get('function', '')
+
+                        })   
+                   
+                    if resource not in result:
+                        result.append(resource)
+                else:
+                    log.info("Weird Resource: failed to find the format")
+                   
+        return result
+   
