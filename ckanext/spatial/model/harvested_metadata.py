@@ -862,6 +862,24 @@ class InspireDocument(MappedXmlDocument):
             ],
             multiplicity="*",
         ),
+                
+        GeminiElement(
+            name="use-limitations-security",
+            search_paths=[
+                "gmd:identificationInfo/gmd:MD_DataIdentification/gmd:resourceConstraints/gmd:MD_SecurityConstraints/gmd:useLimitation/gco:CharacterString/text()",
+                "gmd:identificationInfo/srv:SV_ServiceIdentification/gmd:resourceConstraints/gmd:MD_SecurityConstraints/gmd:useLimitation/gco:CharacterString/text()",
+            ],
+            multiplicity="*",
+        ),      
+                
+        GeminiElement(
+            name="use-limitations-legal",
+            search_paths=[
+                "gmd:identificationInfo/gmd:MD_DataIdentification/gmd:resourceConstraints/gmd:MD_LegalConstraints/gmd:useLimitation/gco:CharacterString/text()",
+                "gmd:identificationInfo/srv:SV_ServiceIdentification/gmd:resourceConstraints/gmd:MD_LegalConstraints/gmd:useLimitation/gco:CharacterString/text()",
+            ],
+            multiplicity="*",
+        ),                   
         GeminiElement(
             name="spatial-data-service-type",
             search_paths=[

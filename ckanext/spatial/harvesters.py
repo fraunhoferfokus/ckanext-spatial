@@ -1073,7 +1073,8 @@ class GeminiHarvester(SpatialHarvester):
         return result
 
     def convert_to_datetime(self, dt):
-        try:
+        import datetime
+        try:           
             # the given format is already datetime
             t = datetime.datetime.strptime(dt, "%Y-%m-%dT%H:%M:%S")
             return t.isoformat()
@@ -1085,21 +1086,26 @@ class GeminiHarvester(SpatialHarvester):
                 return (datetime.datetime.combine(d.date(), midnight)).isoformat()
             except:
                 try:
-                    if 'Z' in dt or '+' in dt:
+                    if 'Z' in dt:
+                        log.debug('Convert to Datetime in Z: %s', dt)
                         value = dt.find('Z')
                         if value != -1:
                             try:
                                 return (datetime.datetime.strptime(dt[:-1], '%Y-%m-%dT%H:%M:%S')).isoformat()
                             except:
                                 return (datetime.datetime.strptime(dt[:-1], '%Y-%m-%d')).isoformat()
+                    if '+' in dt:
+                        log.debug('Convert to Datetime right place: %s', dt)
                         value = dt.find('+')
                         if value != -1:
                             try:
+                                log.debug('Convert to Datetime almost there: %s', dt)
                                 return (datetime.datetime.strptime(dt[:-((len(dt) - value))], '%Y-%m-%dT%H:%M:%S')).isoformat()
                             except:
                                 return (datetime.datetime.strptime(dt[:-((len(dt) - value))], '%Y-%m-%d')).isoformat()
                 except:
                     raise Exception('Could not extract date: %s' % dt)
+
 
     def gen_new_name(self, title):
         name = munge_title_to_name(title).replace('_', '-')
@@ -2210,3 +2216,46 @@ class LowerSaxonyHarvester(GeminiCswHarvester, SingletonPlugin):
 
     def _setup_csw_client(self, url):
         self.csw = CswService(url)
+        
+    def handle_licenses(self, gemini_values):
+        license_dict = {}
+        other = None
+        url = None 
+        
+        if len(gemini_values['other-constraints']) > 0: 
+                    for constraint in gemini_values['other-constraints']:
+                        if 'name' in constraint.lower():
+                            index_url = (constraint.lower()).find('url:')     
+                            other = ((constraint[6:index_url-2]).replace('"', '' )).rstrip() 
+                            url = ((constraint[index_url+4:]).replace('"', '' )).rstrip() 
+                        else: 
+                            if 'titel' in constraint.lower():
+                                index_url = (constraint.lower()).find('url:')     
+                                other = ((constraint[7:index_url-4]).replace('"', '' )).rstrip() 
+                                url =((constraint[index_url+5:]).replace('"', '' )).rstrip() 
+                    
+        # license is described through a regular pattern    
+        if other is not None:             
+            gemini_values['other-constraints'].append(other)
+            # function is called for finding the license_id
+            license_dict = licenses.translate_license_data(gemini_values)
+            license_dict['other'] = other
+            license_dict['license_url'] = url             
+      
+        else:      
+            useLimitations = gemini_values['use-limitations-legal'] + gemini_values['use-limitations-security'] + gemini_values['use-limitations']                 
+            if len(useLimitations) > 0: 
+                for con in useLimitations:
+                    if u'Nieders\xe4chsische Umweltdaten-Lizenz' in con or u'Nieders\xe4chsische Umweltdatenlizenz' in con:              
+                        license_dict = {'license_url': "http://numis.niedersachsen.de/daten/lizenzen/udl-nlpv",
+                                        'license_id': 'other-open',
+                                        'other': u'Nieders\xe4chsische Umweltdaten-Lizenz'}
+                    elif u'Datenlizenz Deutschland Namensnennung' in con: 
+                                        license_dict = {'license_url': 'http://www.daten-deutschland.de/bibliothek/Datenlizenz_Deutschland/dl-de-by-1.0',
+                                                        'license_id': 'dl-de-by-1.0',
+                                                        'other': u'Datenlizenz Deutschland Namensnennung'}
+       
+        if len(license_dict) == 0:
+            license_dict = licenses.translate_license_data(gemini_values)
+                                                                     
+        return license_dict
