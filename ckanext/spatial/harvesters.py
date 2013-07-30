@@ -1984,3 +1984,229 @@ class RegionalStatistikHarvester(DestatisHarvester, SingletonPlugin):
 
     def handle_services(self, service_locators):
         return []
+
+
+class LowerSaxonyHarvester(GeminiCswHarvester, SingletonPlugin):
+    '''
+    A Harvester for CSW servers, for targeted at import into the German Open Data Platform now focused on Lower Saxony
+    '''
+    implements(IHarvester)
+
+    force_import = True
+    search_query = 'saxony'
+
+    def info(self):
+        return {
+            'name': 'saxony',
+            'title': 'Lower Saxony Harvester',
+            'description': 'Harvester for the CSW Servers of Lower Saxony providing environmental data'
+            }
+
+    def delete_obsolete_packages(self, harvest_job, xml_file_ids):
+        xml_files = []
+        psq = PackageSearchQuery()
+        result_dict = psq.run({'q': self.search_query})
+        if (result_dict['count'] > 0):
+            log.info("Found previously harvested packages (amount: %s)" % result_dict['count'])
+        else:
+            return
+
+        update_list = []
+        name_to_xml_map = {}
+
+        for id in xml_file_ids:
+            record = self.csw.getrecordbyid([id])
+            xml_files.append(record['xml'])
+
+
+        for xml_file in xml_files:
+            harvest_object = HarvestObject(guid=None, job=harvest_job)
+            harvest_object.content = xml_file
+            # we have to save the guid for this particular harvest object
+            gemini_document = InspireDocument(harvest_object.content)
+            gemini_values = gemini_document.read_values()
+            gemini_guid = gemini_values['guid']
+            harvest_object.guid = gemini_guid
+
+            harvest_object.save()
+            self.obj = harvest_object
+
+            package_dict = {
+                'resources': []
+            }
+
+            resource_locators = gemini_values.get('resource-locator', [])
+            resources = self.handle_resources(resource_locators)
+            package_dict['resources'].extend(resources)
+
+            service_locators = gemini_values.get('service-locator', [])
+            services = self.handle_services(service_locators)
+            package_dict['resources'].extend(services)
+
+            package_dict['url'] = gemini_values['guid']
+
+            name = self.gen_name(harvest_object, gemini_values, gemini_guid, package_dict)
+            name_to_xml_map[name] = xml_file
+
+            if name in result_dict['results']:
+                log.info("Found updated package")
+                update_list.append(name)
+
+            #harvest_object.delete()
+
+        to_delete = list(set(result_dict['results']) - set(update_list))
+        if len(to_delete) > 0:
+            log.info("Found obsolete packages -> deleting")
+
+        for name in to_delete:
+            log.info("Going to delete package with name %s" % name)
+
+            # delete package from ckan
+            last_package = Session.query(Package).filter(Package.name==name).all()
+
+            from ckan.model import package_table
+            u = update(package_table) \
+                    .where(package_table.c.name == bindparam('b_package_name')) \
+                    .values(state='deleted')
+            Session.execute(u, params={'b_package_name': name})
+            Session.commit()
+
+            from ckanext.harvest.model import harvest_object_table
+            u = update(harvest_object_table) \
+                    .where(harvest_object_table.c.package_id==bindparam('b_package_id')) \
+                    .values(current=False)
+            Session.execute(u, params={'b_package_id':last_package[0].id})
+            Session.commit()
+
+            log.info("deleted package with name %s" % name)
+
+            # Refresh current object from session, otherwise the
+            # import paster command fails
+            Session.remove()
+            Session.add(self.obj)
+            Session.refresh(self.obj)
+
+
+
+    def set_resource_locator(self, gemini_values):
+        resource_locators = gemini_values.get('resource-locator', [])
+        service_locators = gemini_values.get('service-locator', [])
+        
+        if len(service_locators) == 0 and len(resource_locators) == 0: 
+            gemini_values['resource_locator'] = gemini_values.get('distributer-resource-locator', [])
+
+
+
+    def gather_stage(self, harvest_job):
+        log.debug('In OGPDHarvester gather_stage')
+        # Get source URL
+        url = harvest_job.source.url
+        xml_file_list = []
+        # Setup CSW client
+        try:
+            self._setup_csw_client(url)
+        except Exception, e:
+            self._save_gather_error('Error contacting the CSW server: %s' % e, harvest_job)
+            return None
+
+        log.debug('Starting gathering for %s ' % url)
+        used_identifiers = []
+        ids = []
+        try:
+            for identifier in self.csw.getidentifiers(keywords=['Opendata'],page=10):
+                try:
+                    log.info('Got identifier %s from the CSW', identifier)
+                    if identifier in used_identifiers:
+                        log.error('CSW identifier %r already used, skipping...' % identifier)
+                        continue
+                    if identifier is None:
+                        log.error('CSW returned identifier %r, skipping...' % identifier)
+                        ## log an error here? happens with the dutch data
+                        continue
+
+                    # Create a new HarvestObject for this identifier
+                    obj = HarvestObject(guid=identifier, job=harvest_job)
+                    obj.save()
+
+                    ids.append(obj.id)
+                    used_identifiers.append(identifier)
+                except Exception, e:
+                    self._save_gather_error('Error for the identifier %s [%r]' % (identifier, e), harvest_job)
+                    continue
+
+            self.delete_obsolete_packages(harvest_job, used_identifiers)
+        except Exception, e:
+            self._save_gather_error('Error gathering the identifiers from the CSW server [%r]' % e, harvest_job)
+            return None
+
+        if len(ids) == 0:
+            self._save_gather_error('No records received from the CSW server', harvest_job)
+            return None
+
+        return ids
+
+    def fetch_stage(self, harvest_object):
+        url = harvest_object.source.url
+        # Setup CSW client
+        try:
+            self._setup_csw_client(url)
+        except Exception, e:
+            self._save_object_error('Error contacting the CSW server: %s' % e, harvest_object)
+            return False
+
+        identifier = harvest_object.guid
+        try:
+            # TODO: investigate support for both gmd:MD_Metadata or gmi:MI_Metadata
+            record = self.csw.getrecordbyid([identifier])
+        except Exception, e:
+            self._save_object_error('Error getting the CSW record with GUID %s' % identifier, harvest_object)
+            return False
+
+        if record is None:
+            self._save_object_error('Empty record for GUID %s' % identifier, harvest_object)
+            return False
+
+        try:
+            # Save the fetch contents in the HarvestObject
+            harvest_object.content = record['xml']
+            harvest_object.save()
+        except Exception, e:
+            self._save_object_error('Error saving the harvest object for GUID %s [%r]' % (identifier, e), harvest_object)
+            return False
+
+        log.debug('XML content saved (len %s)', len(record['xml']))
+        return True
+
+    def import_stage(self, harvest_object):
+        '''Import stage of the OGPD Harvester'''
+
+        log = logging.getLogger(__name__ + '.import')
+        #log.debug('Import stage for harvest object: %r', harvest_object)
+        log.debug('Import stage for harvest object')
+
+        if not harvest_object:
+            log.error('No harvest object received')
+            return False
+
+        # Save a reference
+        self.obj = harvest_object
+
+        if harvest_object.content is None:
+            self._save_object_error('Empty content for object %s' % harvest_object.id, harvest_object, 'Import')
+            return False
+        try:
+            self.import_inspire_object(harvest_object.content, harvest_object)
+            return True
+        except Exception, e:
+            log.error('Exception during import: %s' % text_traceback())
+            if not str(e).strip():
+                self._save_object_error('Error importing INSPIRE document.', harvest_object, 'Import')
+            else:
+                self._save_object_error('Error importing INSPIRE document: %s' % str(e), harvest_object, 'Import')
+
+            if debug_exception_mode:
+                raise
+
+
+    def _setup_csw_client(self, url):
+        self.csw = CswService(url)
