@@ -1773,7 +1773,8 @@ class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
         return result
    
 
-class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
+#class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
+class DestatisHarvester(OGPDHarvester, SingletonPlugin):
     '''
     A Harvester for CSW servers, for targeted at import into the German Open Data Platform now focused on Destatis
     '''
@@ -1870,6 +1871,7 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
             Session.add(self.obj)
             Session.refresh(self.obj)
 
+
     def gather_stage(self, harvest_job):
         log.debug('In DestatisHarvester gather_stage')
         # Get source URL
@@ -1917,6 +1919,7 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
 
         return ids
 
+
     def fetch_stage(self, harvest_object):
 
         identifier = harvest_object.guid
@@ -1943,6 +1946,7 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
                 return False
             finally:
                 f.close()
+
 
     def import_stage(self, harvest_object):
         '''Import stage of the Destatis Harvester'''
@@ -1977,6 +1981,8 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
     def _setup_csw_client(self, url):
         self.csw = CswService(url)
 
+
+
     def handle_resources(self, resource_locators):
         ''' Handle all resources except for WMS endpoints for Destatis '''
         result = []
@@ -1987,32 +1993,24 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
                 if url:
                     resource_format = ''
                     resource = {}
-                    if self._is_pdf_URI(url):
-                        resource_format = 'PDF'
-                    elif self._is_wms(url):
-                        resource['verified'] = True
-                        resource['verified_date'] = datetime.now().isoformat()
-                        resource_format = 'WMS'
-                    elif 'tabelleErgebnis' in url:
-                        log.info("Found valid resource")
-                        if url.endswith('.csv'):
-                            url = url.replace('tabelleErgebnis', 'tabelleDownload')[:-4] + '.csv'
+                    if 'tabelleDownload' in url:
+                        if 'wms' in url.lower():
+                            resource_format = 'WMS'
+                            resource['verified'] = True
+                            resource['verified_date'] = datetime.now().isoformat()      
+                        elif url.endswith('.csv'):
                             resource_format = 'CSV'
                         elif url.endswith('.xls'):
-                            url = url.replace('tabelleErgebnis', 'tabelleDownload')[:-4] + '.xls'
                             resource_format = 'XLS'
                         elif url.endswith('.xml'):
-                            url = url.replace('tabelleErgebnis', 'tabelleDownload')[:-4] + '.xml'
                             resource_format = 'XML'
                         elif url.endswith('.html'):
-                            url = url.replace('tabelleErgebnis', 'tabelleDownload')[:-5] + '.xls'
-                            resource_format = 'XLS'
+                            resource_format = 'HTML'
+                        elif url.endswith('.pdf'):
+                            resource_format = 'PDF'            
                         else:
-                            url = url.replace('tabelleErgebnis', 'tabelleDownload') + '.xls'
                             resource_format = 'XLS'
-                    elif 'tabelleDownload' in url:
-                        if url.endswith('.xml'):
-                            resource_format = 'XML'
+                    
                     if resource_format:
                         resource.update(
                             {
@@ -2022,14 +2020,16 @@ class DestatisHarvester(GeminiCswHarvester, SingletonPlugin):
                                 'format': resource_format or None,
                                 'resource_locator_protocol': resource_locator.get('protocol', ''),
                                 'resource_locator_function': resource_locator.get('function', '')
-
+    
                             })
                         result.append(resource)
                     else:
                         log.info("Weird Resource, write URL to file")
-                        with open('Failed.txt', 'a') as f:
+                        with open('/Failed.txt', 'a') as f:
                             f.write("Weird Resource: %s\n" % url)
         return result
+    
+    
 
     def handle_licenses(self, gemini_values):
         # add cc-by to gemini other constraints
