@@ -1623,7 +1623,8 @@ class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
 
 
 
-
+   
+    
     def handle_resources(self, resource_locators):
         ''' Handle all resources '''
         result = []
@@ -1691,9 +1692,9 @@ class OGPDHarvester(GeminiCswHarvester, SingletonPlugin):
                         is_service = True 
                     elif url.endswith('?wcs'):
                         resource_format = 'WCS'
-                        is_service = True #
+                        is_service = True 
                     else:
-                        resource_format = 'WEB' 
+                        resource_format = 'HTML' 
                         
               
                 if resource_format:                   
@@ -2135,7 +2136,7 @@ class RegionalStatistikHarvester(DestatisHarvester, SingletonPlugin):
                         result.append(resource)
                     else:
                         log.info("Weird Resource, write URL to file")
-                        with open('Failed.txt', 'a') as f:
+                        with open('/Failed.txt', 'a') as f:
                             f.write("Weird Resource: %s\n" % url)
         return result
 
@@ -2150,7 +2151,7 @@ class LowerSaxonyHarvester(GeminiCswHarvester, SingletonPlugin):
     implements(IHarvester)
 
     force_import = True
-    search_query = 'saxony'
+    search_query = 'numis'
 
     def info(self):
         return {
@@ -2159,59 +2160,33 @@ class LowerSaxonyHarvester(GeminiCswHarvester, SingletonPlugin):
             'description': 'Harvester for the CSW Servers of Lower Saxony providing environmental data'
             }
 
-    def delete_obsolete_packages(self, harvest_job, xml_file_ids):
+    def delete_obsolete_packages(self, harvest_job, identifiers):
         xml_files = []
         psq = PackageSearchQuery()
         result_dict = psq.run({'q': self.search_query})
         if (result_dict['count'] > 0):
-            log.info("Found previously harvested packages (amount: %s)" % result_dict['count'])
-        else:
-            return
+            log.info("Found previously harvested packages (amount: %s)" % result_dict['results'])
 
+        
         update_list = []
-        name_to_xml_map = {}
-
-        for id in xml_file_ids:
-            record = self.csw.getrecordbyid([id])
-            xml_files.append(record['xml'])
-
-
-        for xml_file in xml_files:
-            harvest_object = HarvestObject(guid=None, job=harvest_job)
-            harvest_object.content = xml_file
-            # we have to save the guid for this particular harvest object
-            gemini_document = InspireDocument(harvest_object.content)
-            gemini_values = gemini_document.read_values()
-            gemini_guid = gemini_values['guid']
-            harvest_object.guid = gemini_guid
-
-            harvest_object.save()
-            self.obj = harvest_object
-
-            package_dict = {
-                'resources': []
-            }
-
-            resource_locators = gemini_values.get('resource-locator', [])
-            resources = self.handle_resources(resource_locators)
-            package_dict['resources'].extend(resources)
-
-            service_locators = gemini_values.get('service-locator', [])
-            services = self.handle_services(service_locators)
-            package_dict['resources'].extend(services)
-
-            package_dict['url'] = gemini_values['guid']
-
-            name = self.gen_name(harvest_object, gemini_values, gemini_guid, package_dict)
-            name_to_xml_map[name] = xml_file
-
-            if name in result_dict['results']:
-                log.info("Found updated package")
-                update_list.append(name)
-
-            #harvest_object.delete()
+        for identifier in identifiers:
+            try:
+                pkg_query = Session.query(Package).filter(Package.state == u'active')             
+                for pkg in pkg_query:
+                    try:
+                       # filter only packages (not harvest objects)
+                       if pkg.type != 'harvest' and pkg.extras.has_key('metadata_original_id'):
+                           if pkg.extras['metadata_original_id'] == identifier:
+                                log.info("Found updated package")
+                                update_list.append(pkg.name)
+                    except Exception, e:
+                        log.debug('Guid check for %s failed with exception: %s' % (identifier, str(e)))
+            except Exception, f:
+                log.debug('database request failed for: %s' % f)
+    
 
         to_delete = list(set(result_dict['results']) - set(update_list))
+        
         if len(to_delete) > 0:
             log.info("Found obsolete packages -> deleting")
 
@@ -2219,7 +2194,7 @@ class LowerSaxonyHarvester(GeminiCswHarvester, SingletonPlugin):
             log.info("Going to delete package with name %s" % name)
 
             # delete package from ckan
-            last_package = Session.query(Package).filter(Package.name==name).all()
+            last_package = Session.query(Package).filter(Package.name == name).all()
 
             from ckan.model import package_table
             u = update(package_table) \
@@ -2230,25 +2205,20 @@ class LowerSaxonyHarvester(GeminiCswHarvester, SingletonPlugin):
 
             from ckanext.harvest.model import harvest_object_table
             u = update(harvest_object_table) \
-                    .where(harvest_object_table.c.package_id==bindparam('b_package_id')) \
+                    .where(harvest_object_table.c.package_id == bindparam('b_package_id')) \
                     .values(current=False)
             Session.execute(u, params={'b_package_id':last_package[0].id})
             Session.commit()
 
             log.info("deleted package with name %s" % name)
 
-            # Refresh current object from session, otherwise the
-            # import paster command fails
-            Session.remove()
-            Session.add(self.obj)
-            Session.refresh(self.obj)
 
 
-    def gather_stage(self, harvest_job):
+    def gather_stage(self, harvest_job):     
         log.debug('In OGPDHarvester gather_stage')
         # Get source URL
         url = harvest_job.source.url
-        xml_file_list = []
+
         # Setup CSW client
         try:
             self._setup_csw_client(url)
@@ -2260,7 +2230,7 @@ class LowerSaxonyHarvester(GeminiCswHarvester, SingletonPlugin):
         used_identifiers = []
         ids = []
         try:
-            for identifier in self.csw.getidentifiers(keywords=['Opendata'],page=10):
+            for identifier in self.csw.getidentifiers(keywords=['Opendata'], page=10):
                 try:
                     log.info('Got identifier %s from the CSW', identifier)
                     if identifier in used_identifiers:
@@ -2268,9 +2238,9 @@ class LowerSaxonyHarvester(GeminiCswHarvester, SingletonPlugin):
                         continue
                     if identifier is None:
                         log.error('CSW returned identifier %r, skipping...' % identifier)
-                        ## log an error here? happens with the dutch data
                         continue
 
+                    
                     # Create a new HarvestObject for this identifier
                     obj = HarvestObject(guid=identifier, job=harvest_job)
                     obj.save()
@@ -2281,7 +2251,6 @@ class LowerSaxonyHarvester(GeminiCswHarvester, SingletonPlugin):
                     self._save_gather_error('Error for the identifier %s [%r]' % (identifier, e), harvest_job)
                     continue
 
-            self.delete_obsolete_packages(harvest_job, used_identifiers)
         except Exception, e:
             self._save_gather_error('Error gathering the identifiers from the CSW server [%r]' % e, harvest_job)
             return None
@@ -2289,7 +2258,8 @@ class LowerSaxonyHarvester(GeminiCswHarvester, SingletonPlugin):
         if len(ids) == 0:
             self._save_gather_error('No records received from the CSW server', harvest_job)
             return None
-
+        
+        self.delete_obsolete_packages(harvest_job, ids)
         return ids
 
     def fetch_stage(self, harvest_object):
@@ -2303,7 +2273,7 @@ class LowerSaxonyHarvester(GeminiCswHarvester, SingletonPlugin):
 
         identifier = harvest_object.guid
         try:
-            # TODO: investigate support for both gmd:MD_Metadata or gmi:MI_Metadata
+            #
             record = self.csw.getrecordbyid([identifier])
         except Exception, e:
             self._save_object_error('Error getting the CSW record with GUID %s' % identifier, harvest_object)
@@ -2323,6 +2293,7 @@ class LowerSaxonyHarvester(GeminiCswHarvester, SingletonPlugin):
 
         log.debug('XML content saved (len %s)', len(record['xml']))
         return True
+
 
     def import_stage(self, harvest_object):
         '''Import stage of the OGPD Harvester'''
@@ -2438,13 +2409,13 @@ class LowerSaxonyHarvester(GeminiCswHarvester, SingletonPlugin):
                             m = re.search('\S+service=(\w+)', url.lower()) 
                             resource_format = m.group(1)
                         is_service = True                            
-                    elif url.endswith('?wms'):
+                    elif url.endswith('?wms') or url.endswith('wms?'):
                         resource_format = 'WMS'
                         is_service = True
-                    elif url.endswith('?wfs'):
+                    elif url.endswith('?wfs') or url.endswith('wfs?'):
                         resource_format = 'WFS'
                         is_service = True 
-                    elif url.endswith('?wcs'):
+                    elif url.endswith('?wcs') or url.endswith('wcs?'):
                         resource_format = 'WCS'
                         is_service = True 
                     else:
@@ -2463,7 +2434,7 @@ class LowerSaxonyHarvester(GeminiCswHarvester, SingletonPlugin):
                     if is_service:
                             resource['description'] = resource_locator.get('description') if resource_locator.get('description') else  resource_format + ' - Service',
                     else:
-                        resource['description'] = resource_locator.get('description') if resource_locator.get('description') else  resource_format + ' - Resource',                                 
+                        resource['description'] = resource_locator.get('description') if resource_locator.get('description') else  resource_format + ' - Resource',
                     
                     
                     if resource not in result:
@@ -2472,17 +2443,18 @@ class LowerSaxonyHarvester(GeminiCswHarvester, SingletonPlugin):
         return result
     
     
+    
     def handle_services(self, service_locators):
         ''' Handle all services'''
         result = []
         if len(service_locators):
-            log.info("Found %s resources" % len(service_locators))
+            log.info("Found %s services" % len(service_locators))
             for service_locator in service_locators:
                 url = service_locator.get('url', '')
                 if url:
                     service_format = ''
                     resource = {}
-                    log.info("Found valid resource")
+                    log.info("Found valid service")
                     if url.endswith('.xml'):
                         service_format = 'XML'
                     elif 'service=' in url.lower():         
@@ -2492,18 +2464,18 @@ class LowerSaxonyHarvester(GeminiCswHarvester, SingletonPlugin):
                         else:
                             m = re.search('\S+service=(\w+)', url.lower())
                             service_format = m.group(1)                            
-                    elif url.endswith('?wms'):
+                    elif url.endswith('?wms') or url.endswith('wms?'):
                         service_format = 'WMS'
-                    elif url.endswith('?wfs'):
+                    elif url.endswith('?wfs') or url.endswith('wfs?'):
                         service_format = 'WFS'
-                    elif url.endswith('?wcs'):
+                    elif url.endswith('?wcs') or url.endswith('wcs?'):
                         service_format = 'WCS'
                     elif 'wmsserver' in url.lower():
                         service_format = 'WMS'
                     elif 'csw' in url.lower():
                         service_format = 'CSW'    
 
-   
+                
                 if service_format:                   
                     resource.update(
                         {
@@ -2513,13 +2485,12 @@ class LowerSaxonyHarvester(GeminiCswHarvester, SingletonPlugin):
                             'description' : service_locator.get('description') if service_locator.get('description') else  service_format + ' - Service',
                             'resource_locator_protocol': service_locator.get('protocol', ''),
                             'resource_locator_function': service_locator.get('function', '')
-
                         })   
                    
                     if resource not in result:
                         result.append(resource)
                 else:
-                    log.info("Failed to find the service")
+                    log.info("Failed to find service name for %s" % str(url))
                    
         return result
    
