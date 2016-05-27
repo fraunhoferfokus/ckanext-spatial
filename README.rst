@@ -2,6 +2,8 @@
 ckanext-spatial - Geo related plugins for CKAN
 ==============================================
 
+**Hinweis:** Dieses Repository wird nicht mehr für die Weiterentwicklung von GovData genutzt. Für Fragen, Anregungen und Diskussionen bzgl. GovData (www.govdata.de) nutzen Sie bitte die hier zur Verfügung gestellten Repositories: https://github.com/GovDataOfficial
+
 This extension contains plugins that add geospatial capabilities to CKAN.
 The following plugins are currently available:
 
